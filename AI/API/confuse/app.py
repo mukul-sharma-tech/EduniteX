@@ -34,7 +34,9 @@ ov_compiled_model = ie.compile_model(model=ov_model, device_name="CPU")
 ov_input_layer = ov_compiled_model.input(0)
 ov_output_layer = ov_compiled_model.output(0)
 
-keras_model = load_model('./emotion_model.h5')
+# keras_model = load_model('./emotion_model.h5')
+keras_model = load_model('./emotion_model.h5', compile=False)
+
 
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
 
