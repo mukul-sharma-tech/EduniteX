@@ -3,7 +3,9 @@ import cv2
 import numpy as np
 import base64
 from keras.models import load_model
-from keras.preprocessing.image import img_to_array
+# from keras.preprocessing.image import img_to_array
+from tensorflow.keras.utils import img_to_array
+
 from openvino.runtime import Core
 from flask_cors import CORS
 
