@@ -1,11 +1,10 @@
-body {
+/* body {
     margin: 0;
 }
 
 .flex-container {
     height: calc(100% - 150px);
     width: 100%;
-    /* margin: 0 auto; */
     display: flex;
     flex-direction: row;
     align-items: center;
@@ -36,4 +35,186 @@ body {
     bottom: 0px;
     width: 100%;
     height: auto;
+} */
+
+
+
+/* General Layout & Containers */
+.unsupported-browser-container,
+.username-prompt-container {
+  background: white;
+  width: 30%;
+  height: auto;
+  padding: 20px;
+  min-width: 400px;
+  text-align: center;
+  margin: 50px auto 0 auto;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.username-prompt-label {
+  margin: 0;
+  font-weight: bold;
+  padding-right: 50px;
+}
+
+.connect-button.MuiButton-root {
+  margin: 20px !important;
+}
+
+.video-preview-container {
+  justify-content: center;
+  text-align: center;
+  padding-top: 40px;
+}
+
+.video-preview {
+  border: 1px solid #bdbdbd;
+  object-fit: fill;
+  width: 60%;
+  height: 30%;
+  border-radius: 8px;
+}
+
+.invite-container {
+  padding-top: 20px;
+  text-align: center;
+}
+
+.copy-link-button.MuiButton-root {
+  background-color: #3f51b5 !important;
+  color: whitesmoke !important;
+  margin-left: 20px !important;
+  margin-top: 10px !important;
+  width: 120px;
+  font-size: 10px !important;
+}
+
+/* Main Video Grid */
+#main.flex-container {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 20px;
+  padding: 20px;
+  margin: 0;
+}
+
+/* Individual Video Box */
+.video-box {
+  position: relative;
+  width: 320px;
+  height: 180px;
+  background: #111;
+  border: 1px solid #bdbdbd;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  transition: all 0.3s ease-in-out;
+}
+
+/* Pinned Video Styles */
+.video-box.pinned {
+  width: 80vw;
+  max-width: 960px;
+  height: auto;
+  aspect-ratio: 16 / 9;
+}
+
+.video-box video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #111;
+  display: block;
+}
+
+/* Overlays on Video Box */
+.name-label {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 4px 8px;
+  text-align: left;
+  font-weight: bold;
+  font-size: 16px;
+  z-index: 2;
+  border-bottom-left-radius: 7px; /* Match parent's border-radius */
+  border-bottom-right-radius: 7px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.pin-button.MuiIconButton-root {
+  position: absolute !important;
+  top: 8px !important;
+  right: 8px !important;
+  z-index: 3 !important;
+  background: rgba(255, 255, 255, 0.8) !important;
+  border: 1px solid #ccc !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
+  padding: 4px !important;
+}
+.pin-button.MuiIconButton-root:hover {
+  background: white !important;
+}
+
+/* No Video Placeholder */
+.no-video-placeholder {
+  width: 100%;
+  height: 100%;
+  background: #222;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #888;
+  font-size: 18px;
+  flex-direction: column;
+  border-radius: 8px;
+}
+
+.no-video-placeholder .icon {
+  font-size: 48px;
+  margin-bottom: 8px;
+}
+
+.no-video-placeholder .text {
+  font-weight: bold;
+  letter-spacing: 2px;
+}
+
+/* Bottom Control Bar */
+.btn-down {
+  background-color: whitesmoke;
+  text-align: center;
+  padding: 10px 0;
+  border-bottom: 1px solid #ddd;
+}
+
+/* Chat Modal */
+.chat-modal .modal-dialog {
+  z-index: 999999;
+}
+
+.chat-modal .modal-body {
+  overflow-y: auto;
+  height: 400px;
+  text-align: left;
+}
+
+.chat-modal .modal-body p {
+  word-break: break-all;
+}
+
+.div-send-msg {
+  display: flex;
+  gap: 10px;
 }

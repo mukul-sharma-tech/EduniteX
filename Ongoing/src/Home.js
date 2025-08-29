@@ -27,7 +27,7 @@ class Home extends Component {
     return (
       <>
         <div>
-          <h1 style={{ fontSize: "45px" }}>Edu Assist Meeting</h1>
+          <h1 style={{ fontSize: "45px" }}>EduniteX Meeting</h1>
           <p style={{ fontWeight: "200" }}>
             Enter the meeting URL given by your teacher or create a new link if
             you are a teacher

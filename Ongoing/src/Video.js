@@ -1,8 +1,8 @@
 import React, { Component } from "react";
 import io from "socket.io-client";
 import faker from "faker";
-
-import { IconButton, Badge, Input, Button } from "@mui/material";
+import { Autocomplete, TextField, CircularProgress, Typography, ToggleButtonGroup, ToggleButton, MenuItem, IconButton, Badge, Input, Button } from '@mui/material';
+import { supabase } from "./supabaseClient";
 import VideocamIcon from "@mui/icons-material/Videocam";
 import VideocamOffIcon from "@mui/icons-material/VideocamOff";
 import MicIcon from "@mui/icons-material/Mic";
@@ -12,14 +12,14 @@ import StopScreenShareIcon from "@mui/icons-material/StopScreenShare";
 import CallEndIcon from "@mui/icons-material/CallEnd";
 import ChatIcon from "@mui/icons-material/Chat";
 import PushPinIcon from "@mui/icons-material/PushPin";
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 
 import { message } from "antd";
-// import "antd/dist/antd.css";
 
 import { Row } from "reactstrap";
 import Modal from "react-bootstrap/Modal";
 import "bootstrap/dist/css/bootstrap.css";
-import "./Video.css";
+import "./Video.css"; // Import the new CSS file
 
 const server_url =
   process.env.NODE_ENV === "production" ? "" : "http://localhost:4001";
@@ -37,36 +37,54 @@ const peerConnectionConfig = {
 };
 var socket = null;
 var socketId = null;
-var elms = 0;
 
 class Video extends Component {
   constructor(props) {
     super(props);
-
     this.localVideoref = React.createRef();
-
     this.videoAvailable = false;
     this.audioAvailable = false;
 
     this.state = {
-      video: false,
-      audio: false,
-      screen: false,
-      showModal: false,
-      screenAvailable: false,
-      messages: [],
-      message: "",
-      newmessages: 0,
-      askForUsername: true,
-      username: faker.internet.userName(),
-      usernames: {}, // socketId: username
-      streams: {}, // socketId: MediaStream
-      pinnedId: null, // for pinning a video
-    };
-    this.remoteVideoRefs = {}; // socketId: ref
-    connections = {};
+      // --- All your existing state from before ---
+      video: false, audio: false, screen: false, showModal: false, screenAvailable: false,
+      messages: [], message: "", newmessages: 0, usernames: {}, streams: {}, pinnedId: null,
+      askForUsername: true, username: '', userRole: null, selectedUserDetails: null,
+      searchOptions: [], loading: false, availableSubjects: [], selectedSubject: '',
 
+      // --- NEW STATE FOR CONFUSION TRACKER ---
+      analysisIntervalId: null, // To hold the setInterval ID (student-side old loop)
+      showConfusionModal: false,
+      confusionDoubtText: '',
+      meetingId: null, // To store the ID of the current meeting
+      // --- NEW: teacher-side per-student confusion map ---
+      confusionBySocketId: {}, // { [socketId]: { label: 'Confused'|'Not Confused'|'No Face', mainEmotion?: string, ts: number } }
+    };
+
+    this.canvasRef = React.createRef(); // Add a ref for our hidden canvas
+    this.remoteVideoRefs = {};
+    this.remoteAnalysisIntervals = {}; // { socketId: intervalId }
+    this.debounceTimeout = null;
+
+    // --- All method bindings ---
+    this.handleSubjectChange = this.handleSubjectChange.bind(this);
+    this.handleRoleChange = this.handleRoleChange.bind(this);
+    this.handleNameSearch = this.handleNameSearch.bind(this);
+    this.handleUsernameSelection = this.handleUsernameSelection.bind(this);
+    connections = {};
+  }
+
+  componentDidMount() {
     this.getPermissions();
+    this.fetchAvailableSubjects();
+  }
+
+  componentWillUnmount() {
+    // Clean up the analysis loop when the component is removed
+    this.stopAnalysis();
+    // Clear teacher-side per-stream intervals
+    Object.values(this.remoteAnalysisIntervals).forEach((id) => clearInterval(id));
+    this.remoteAnalysisIntervals = {};
   }
 
   getPermissions = async () => {
@@ -97,12 +115,189 @@ class Video extends Component {
             window.localStream = stream;
             this.localVideoref.current.srcObject = stream;
           })
-          .then((stream) => {})
           .catch((e) => console.log(e));
       }
     } catch (e) {
       console.log(e);
     }
+  };
+
+  subject
+  fetchAvailableSubjects = async () => {
+    try {
+      const { data, error } = await supabase.from('teachers').select('subjects');
+      if (error) throw error;
+
+      const allSubjectArrays = data.map(teacher => teacher.subjects).filter(Boolean);
+      const flattenedSubjects = [].concat(...allSubjectArrays);
+      const uniqueSubjects = [...new Set(flattenedSubjects)];
+
+      this.setState({ availableSubjects: uniqueSubjects.sort() });
+
+    } catch (error) {
+      console.error("Error fetching subjects:", error.message);
+      message.error("Could not load subject list.");
+    }
+  }
+
+  handleSubjectChange = (event) => {
+    this.setState({
+      selectedSubject: event.target.value,
+      username: '',
+      selectedUserDetails: null,
+      searchOptions: [],
+    });
+  };
+
+  handleTeacherSearch = (searchText) => {
+    // Clear the previous timeout to debounce the input
+    clearTimeout(this.debounceTimeout);
+
+    // If the search text is empty, don't search
+    if (!searchText) {
+      this.setState({ teacherOptions: [] });
+      return;
+    }
+
+    this.setState({ loading: true });
+
+    // Set a new timeout
+    this.debounceTimeout = setTimeout(async () => {
+      try {
+        const { data, error } = await supabase
+          .from('teachers')
+          .select('name')
+          .ilike('name', `%${searchText}%`) // Case-insensitive search
+          .limit(10); // Limit results for performance
+
+        if (error) {
+          throw error;
+        }
+
+        // The Autocomplete component expects an array of strings
+        const teacherNames = data ? data.map(teacher => teacher.name) : [];
+        this.setState({ teacherOptions: teacherNames });
+
+      } catch (error) {
+        console.error('Error fetching teachers:', error.message);
+        message.error("Could not fetch teachers."); // Notify the user
+      } finally {
+        this.setState({ loading: false });
+      }
+    }, 500); // Wait 500ms after the user stops typing
+  }
+
+  // handleNameSearch = (searchText) => {
+  //   clearTimeout(this.debounceTimeout);
+  //   if (!searchText) {
+  //     this.setState({ searchOptions: [] });
+  //     return;
+  //   }
+  //   this.setState({ loading: true });
+
+  //   this.debounceTimeout = setTimeout(async () => {
+  //     const { userRole, selectedSubject } = this.state;
+  //     if (!userRole || !selectedSubject) {
+  //       this.setState({ loading: false });
+  //       return;
+  //     }
+
+  //     const tableName = userRole === 'teacher' ? 'teachers' : 'students';
+
+  //     try {
+  //       let query = supabase
+  //         .from(tableName)
+  //         .select('*')
+  //         .ilike('name', `%${searchText}%`);
+
+  //       // NEW: Filter teachers by the selected subject
+  //       if (userRole === 'teacher') {
+  //         query = query.contains('subjects', [selectedSubject]);
+  //       }
+
+  //       const { data, error } = await query.limit(10);
+  //       if (error) throw error;
+  //       this.setState({ searchOptions: data || [] });
+
+  //     } catch (error) {
+  //       console.error(`Error fetching from ${tableName}:`, error.message);
+  //       message.error(`Could not fetch ${tableName}.`);
+  //     } finally {
+  //       this.setState({ loading: false });
+  //     }
+  //   }, 500);
+  // }
+
+  handleNameSearch = (searchText) => {
+    clearTimeout(this.debounceTimeout);
+    if (!searchText) {
+      this.setState({ searchOptions: [] });
+      return;
+    }
+    this.setState({ loading: true });
+
+    this.debounceTimeout = setTimeout(async () => {
+      const { userRole, selectedSubject } = this.state;
+
+      // --- CORRECTED VALIDATION ---
+      // 1. We must have a role to continue.
+      if (!userRole) {
+        this.setState({ loading: false });
+        return;
+      }
+      // 2. If the user is a teacher, they MUST have selected a subject.
+      //    This check is skipped for students.
+      if (userRole === 'teacher' && !selectedSubject) {
+        this.setState({ loading: false });
+        return;
+      }
+      // --- END CORRECTION ---
+
+      const tableName = userRole === 'teacher' ? 'teachers' : 'students';
+
+      try {
+        let query = supabase
+          .from(tableName)
+          .select('*')
+          .ilike('name', `%${searchText}%`);
+
+        // This part is already correct: only filter for teachers
+        if (userRole === 'teacher') {
+          query = query.contains('subjects', [selectedSubject]);
+        }
+
+        const { data, error } = await query.limit(10);
+        if (error) throw error;
+        this.setState({ searchOptions: data || [] });
+
+      } catch (error) {
+        console.error(`Error fetching from ${tableName}:`, error.message);
+        message.error(`Could not fetch ${tableName}.`);
+      } finally {
+        this.setState({ loading: false });
+      }
+    }, 500);
+  }
+
+
+  // Add this new method to handle the role change
+  handleRoleChange = (event, newRole) => {
+    if (newRole !== null) {
+      this.setState({
+        userRole: newRole,
+        username: '', // Clear username when role changes
+        searchOptions: [], // Clear previous search options
+      });
+    }
+  };
+
+  handleUsernameSelection = (selectedObject) => {
+    this.setState({
+      // Store the entire object (or null if cleared)
+      selectedUserDetails: selectedObject,
+      // Store just the name for display and other parts of the app
+      username: selectedObject ? selectedObject.name : '',
+    });
   };
 
   getMedia = () => {
@@ -126,40 +321,30 @@ class Video extends Component {
       navigator.mediaDevices
         .getUserMedia({ video: this.state.video, audio: this.state.audio })
         .then(this.getUserMediaSuccess)
-        .then((stream) => {})
         .catch((e) => console.log(e));
     } else {
       try {
         let tracks = this.localVideoref.current.srcObject.getTracks();
         tracks.forEach((track) => track.stop());
-      } catch (e) {}
+      } catch (e) { }
     }
   };
 
   getUserMediaSuccess = (stream) => {
     try {
       window.localStream.getTracks().forEach((track) => track.stop());
-    } catch (e) {
-      console.log(e);
-    }
+    } catch (e) { console.log(e); }
 
     window.localStream = stream;
     this.localVideoref.current.srcObject = stream;
 
     for (let id in connections) {
       if (id === socketId) continue;
-
       connections[id].addStream(window.localStream);
-
       connections[id].createOffer().then((description) => {
-        connections[id]
-          .setLocalDescription(description)
+        connections[id].setLocalDescription(description)
           .then(() => {
-            socket.emit(
-              "signal",
-              id,
-              JSON.stringify({ sdp: connections[id].localDescription })
-            );
+            socket.emit("signal", id, JSON.stringify({ sdp: connections[id].localDescription }));
           })
           .catch((e) => console.log(e));
       });
@@ -167,46 +352,30 @@ class Video extends Component {
 
     stream.getTracks().forEach(
       (track) =>
-        (track.onended = () => {
-          this.setState(
-            {
-              video: false,
-              audio: false,
-            },
-            () => {
-              try {
-                let tracks = this.localVideoref.current.srcObject.getTracks();
-                tracks.forEach((track) => track.stop());
-              } catch (e) {
-                console.log(e);
-              }
+      (track.onended = () => {
+        this.setState({ video: false, audio: false, }, () => {
+          try {
+            let tracks = this.localVideoref.current.srcObject.getTracks();
+            tracks.forEach((track) => track.stop());
+          } catch (e) { console.log(e); }
 
-              let blackSilence = (...args) =>
-                new MediaStream([this.black(...args), this.silence()]);
-              window.localStream = blackSilence();
-              this.localVideoref.current.srcObject = window.localStream;
+          let blackSilence = (...args) => new MediaStream([this.black(...args), this.silence()]);
+          window.localStream = blackSilence();
+          this.localVideoref.current.srcObject = window.localStream;
 
-              for (let id in connections) {
-                connections[id].addStream(window.localStream);
-
-                connections[id].createOffer().then((description) => {
-                  connections[id]
-                    .setLocalDescription(description)
-                    .then(() => {
-                      socket.emit(
-                        "signal",
-                        id,
-                        JSON.stringify({
-                          sdp: connections[id].localDescription,
-                        })
-                      );
-                    })
-                    .catch((e) => console.log(e));
-                });
-              }
-            }
-          );
-        })
+          for (let id in connections) {
+            connections[id].addStream(window.localStream);
+            connections[id].createOffer().then((description) => {
+              connections[id].setLocalDescription(description)
+                .then(() => {
+                  socket.emit("signal", id, JSON.stringify({ sdp: connections[id].localDescription }));
+                })
+                .catch((e) => console.log(e));
+            });
+          }
+        }
+        );
+      })
     );
   };
 
@@ -216,7 +385,6 @@ class Video extends Component {
         navigator.mediaDevices
           .getDisplayMedia({ video: true, audio: true })
           .then(this.getDislayMediaSuccess)
-          .then((stream) => {})
           .catch((e) => console.log(e));
       }
     }
@@ -225,27 +393,18 @@ class Video extends Component {
   getDislayMediaSuccess = (stream) => {
     try {
       window.localStream.getTracks().forEach((track) => track.stop());
-    } catch (e) {
-      console.log(e);
-    }
+    } catch (e) { console.log(e); }
 
     window.localStream = stream;
     this.localVideoref.current.srcObject = stream;
 
     for (let id in connections) {
       if (id === socketId) continue;
-
       connections[id].addStream(window.localStream);
-
       connections[id].createOffer().then((description) => {
-        connections[id]
-          .setLocalDescription(description)
+        connections[id].setLocalDescription(description)
           .then(() => {
-            socket.emit(
-              "signal",
-              id,
-              JSON.stringify({ sdp: connections[id].localDescription })
-            );
+            socket.emit("signal", id, JSON.stringify({ sdp: connections[id].localDescription }));
           })
           .catch((e) => console.log(e));
       });
@@ -253,53 +412,35 @@ class Video extends Component {
 
     stream.getTracks().forEach(
       (track) =>
-        (track.onended = () => {
-          this.setState(
-            {
-              screen: false,
-            },
-            () => {
-              try {
-                let tracks = this.localVideoref.current.srcObject.getTracks();
-                tracks.forEach((track) => track.stop());
-              } catch (e) {
-                console.log(e);
-              }
+      (track.onended = () => {
+        this.setState({ screen: false }, () => {
+          try {
+            let tracks = this.localVideoref.current.srcObject.getTracks();
+            tracks.forEach((track) => track.stop());
+          } catch (e) { console.log(e); }
 
-              let blackSilence = (...args) =>
-                new MediaStream([this.black(...args), this.silence()]);
-              window.localStream = blackSilence();
-              this.localVideoref.current.srcObject = window.localStream;
-
-              this.getUserMedia();
-            }
-          );
-        })
+          let blackSilence = (...args) => new MediaStream([this.black(...args), this.silence()]);
+          window.localStream = blackSilence();
+          this.localVideoref.current.srcObject = window.localStream;
+          this.getUserMedia();
+        }
+        );
+      })
     );
   };
 
   gotMessageFromServer = (fromId, message) => {
     var signal = JSON.parse(message);
-
     if (fromId !== socketId) {
       if (signal.sdp) {
-        connections[fromId]
-          .setRemoteDescription(new RTCSessionDescription(signal.sdp))
+        connections[fromId].setRemoteDescription(new RTCSessionDescription(signal.sdp))
           .then(() => {
             if (signal.sdp.type === "offer") {
-              connections[fromId]
-                .createAnswer()
+              connections[fromId].createAnswer()
                 .then((description) => {
-                  connections[fromId]
-                    .setLocalDescription(description)
+                  connections[fromId].setLocalDescription(description)
                     .then(() => {
-                      socket.emit(
-                        "signal",
-                        fromId,
-                        JSON.stringify({
-                          sdp: connections[fromId].localDescription,
-                        })
-                      );
+                      socket.emit("signal", fromId, JSON.stringify({ sdp: connections[fromId].localDescription }));
                     })
                     .catch((e) => console.log(e));
                 })
@@ -310,196 +451,10 @@ class Video extends Component {
       }
 
       if (signal.ice) {
-        connections[fromId]
-          .addIceCandidate(new RTCIceCandidate(signal.ice))
+        connections[fromId].addIceCandidate(new RTCIceCandidate(signal.ice))
           .catch((e) => console.log(e));
       }
     }
-  };
-
-  changeCssVideos = (main) => {
-    // Remove dynamic resizing and enforce fixed aspect ratio
-    let videos = main.querySelectorAll("video");
-    for (let a = 0; a < videos.length; ++a) {
-      videos[a].style.width = "100%";
-      videos[a].style.height = "100%";
-      videos[a].style.objectFit = "cover";
-    }
-    return {
-      minWidth: "320px",
-      minHeight: "180px",
-      width: "100%",
-      height: "100%",
-    };
-  };
-
-  connectToSocketServer = () => {
-    socket = io.connect(server_url, { secure: true });
-
-    socket.on("signal", this.gotMessageFromServer);
-
-    socket.on("connect", () => {
-      socket.emit("join-call", window.location.href);
-      socketId = socket.id;
-
-      socket.on("chat-message", this.addMessage);
-
-      socket.on("user-left", (id) => {
-        // Remove user from state (usernames and streams)
-        this.setState((prev) => {
-          const usernames = { ...prev.usernames };
-          const streams = { ...prev.streams };
-          delete usernames[id];
-          delete streams[id];
-          return { usernames, streams };
-        });
-        // Remove ref
-        delete this.remoteVideoRefs[id];
-        elms = Object.keys(this.state.streams).length + 1; // +1 for local
-        let main = document.getElementById("main");
-        if (main) this.changeCssVideos(main);
-      });
-
-      // --- USERNAME SYNC LOGIC ---
-      // When a user joins, request everyone's username
-      socket.on("user-joined", (id, clients) => {
-        // Send your username to everyone
-        clients.forEach((clientId) => {
-          if (clientId !== socketId) {
-            socket.emit("username", this.state.username, socketId, clientId);
-          }
-        });
-        // Request all usernames from everyone
-        clients.forEach((clientId) => {
-          if (clientId !== socketId) {
-            socket.emit("request-username", clientId);
-          }
-        });
-        // Send your username to the new user
-        if (id !== socketId) {
-          socket.emit("username", this.state.username);
-        }
-        clients.forEach((socketListId) => {
-          connections[socketListId] = new RTCPeerConnection(
-            peerConnectionConfig
-          );
-          // --- ICE DEBUG LOGGING ---
-          connections[socketListId].onicecandidate = function (event) {
-            if (event.candidate != null) {
-              if (
-                event.candidate.candidate &&
-                event.candidate.candidate.includes("stun")
-              ) {
-                console.log(
-                  `[ICE][STUN] Candidate for ${socketListId}:`,
-                  event.candidate.candidate
-                );
-              } else if (
-                event.candidate.candidate &&
-                event.candidate.candidate.includes("turn")
-              ) {
-                console.log(
-                  `[ICE][TURN] Candidate for ${socketListId}:`,
-                  event.candidate.candidate
-                );
-              } else {
-                console.log(
-                  `[ICE] Candidate for ${socketListId}:`,
-                  event.candidate
-                );
-              }
-              socket.emit(
-                "signal",
-                socketListId,
-                JSON.stringify({ ice: event.candidate })
-              );
-            } else {
-              console.log(`[ICE] All ICE candidates sent for ${socketListId}`);
-            }
-          };
-          connections[socketListId].oniceconnectionstatechange = function () {
-            console.log(
-              `[ICE] Connection state for ${socketListId}:`,
-              connections[socketListId].iceConnectionState
-            );
-          };
-          connections[socketListId].onicegatheringstatechange = function () {
-            console.log(
-              `[ICE] Gathering state for ${socketListId}:`,
-              connections[socketListId].iceGatheringState
-            );
-          };
-
-          // Wait for their video stream
-          connections[socketListId].onaddstream = (event) => {
-            this.setState(
-              (prev) => ({
-                streams: { ...prev.streams, [socketListId]: event.stream },
-              }),
-              () => {
-                elms = Object.keys(this.state.streams).length + 1;
-                let main = document.getElementById("main");
-                if (main) this.changeCssVideos(main);
-                // If username is missing, request it
-                if (!this.state.usernames[socketListId]) {
-                  socket.emit("request-username", socketListId);
-                }
-              }
-            );
-          };
-
-          // Add the local video stream
-          if (window.localStream !== undefined && window.localStream !== null) {
-            connections[socketListId].addStream(window.localStream);
-          } else {
-            let blackSilence = (...args) =>
-              new MediaStream([this.black(...args), this.silence()]);
-            window.localStream = blackSilence();
-            connections[socketListId].addStream(window.localStream);
-          }
-        });
-
-        if (id === socketId) {
-          for (let id2 in connections) {
-            if (id2 === socketId) continue;
-
-            try {
-              connections[id2].addStream(window.localStream);
-            } catch (e) {}
-
-            connections[id2].createOffer().then((description) => {
-              connections[id2]
-                .setLocalDescription(description)
-                .then(() => {
-                  socket.emit(
-                    "signal",
-                    id2,
-                    JSON.stringify({ sdp: connections[id2].localDescription })
-                  );
-                })
-                .catch((e) => console.log(e));
-            });
-          }
-        }
-      });
-
-      // Respond to username requests
-      socket.on("request-username", (fromId) => {
-        socket.emit("username", this.state.username, socketId, fromId);
-      });
-
-      // Receive username from others
-      socket.on("username", (username, fromId, toId) => {
-        if (!toId || toId === socketId) {
-          this.setState((prev) => ({
-            usernames: { ...prev.usernames, [fromId]: username },
-          }));
-        }
-      });
-
-      // Send your username to yourself (so you always have your own mapping)
-      socket.emit("username", this.state.username, socketId, socketId);
-    });
   };
 
   silence = () => {
@@ -510,109 +465,50 @@ class Video extends Component {
     ctx.resume();
     return Object.assign(dst.stream.getAudioTracks()[0], { enabled: false });
   };
+
   black = ({ width = 640, height = 480 } = {}) => {
-    let canvas = Object.assign(document.createElement("canvas"), {
-      width,
-      height,
-    });
+    let canvas = Object.assign(document.createElement("canvas"), { width, height });
     canvas.getContext("2d").fillRect(0, 0, width, height);
     let stream = canvas.captureStream();
     return Object.assign(stream.getVideoTracks()[0], { enabled: false });
   };
 
-  handleVideo = () => {
-    this.setState({ video: !this.state.video }, () => {
-      if (!this.state.video) {
-        // Turning video OFF: remove all video tracks and update all connections
-        if (window.localStream) {
-          window.localStream.getVideoTracks().forEach((track) => track.stop());
-          // Remove video track from all peer connections
-          for (let id in connections) {
-            const sender = connections[id]
-              .getSenders()
-              .find((s) => s.track && s.track.kind === "video");
-            if (sender) sender.replaceTrack(null);
-            // Renegotiate
-            connections[id].createOffer().then((description) => {
-              connections[id].setLocalDescription(description).then(() => {
-                socket.emit(
-                  "signal",
-                  id,
-                  JSON.stringify({ sdp: connections[id].localDescription })
-                );
-              });
-            });
-          }
-        }
-      } else {
-        // Turning video ON: get user media and update all connections
-        navigator.mediaDevices
-          .getUserMedia({ video: true, audio: this.state.audio })
-          .then((stream) => {
-            if (window.localStream) {
-              window.localStream.getTracks().forEach((track) => track.stop());
-            }
-            window.localStream = stream;
-            if (this.localVideoref.current) {
-              this.localVideoref.current.srcObject = stream;
-            }
-            for (let id in connections) {
-              const sender = connections[id]
-                .getSenders()
-                .find((s) => s.track && s.track.kind === "video");
-              const videoTrack = stream.getVideoTracks()[0];
-              if (sender && videoTrack) sender.replaceTrack(videoTrack);
-              // Renegotiate
-              connections[id].createOffer().then((description) => {
-                connections[id].setLocalDescription(description).then(() => {
-                  socket.emit(
-                    "signal",
-                    id,
-                    JSON.stringify({ sdp: connections[id].localDescription })
-                  );
-                });
-              });
-            }
-          })
-          .catch((e) => console.log(e));
-      }
-    });
-  };
-  handleAudio = () =>
-    this.setState({ audio: !this.state.audio }, () => this.getUserMedia());
-  handleScreen = () =>
-    this.setState({ screen: !this.state.screen }, () => this.getDislayMedia());
-  handlePin = (id) => {
-    this.setState(
-      (prev) => ({ pinnedId: prev.pinnedId === id ? null : id }),
-      () => {
-        // Always re-attach local stream to local video element
-        if (this.localVideoref.current && window.localStream) {
-          this.localVideoref.current.srcObject = window.localStream;
-        }
-        // Re-add local stream to all connections if available
-        if (window.localStream) {
-          for (let connId in connections) {
-            try {
-              const senders = connections[connId].getSenders();
-              const tracks = window.localStream.getTracks();
-              tracks.forEach((track) => {
-                if (!senders.find((s) => s.track === track)) {
-                  connections[connId].addTrack(track, window.localStream);
-                }
-              });
-            } catch (e) {}
-          }
-        }
-      }
-    );
-  };
+  // handleVideo = () => this.setState({ video: !this.state.video }, () => this.getUserMedia());
+  // handleAudio = () => this.setState({ audio: !this.state.audio }, () => this.getUserMedia());
+
+  // Replace your old handleVideo function with this one
+handleVideo = () => {
+  const newVideoState = !this.state.video;
+  this.setState({ video: newVideoState }); // This updates the button icon
+
+  if (window.localStream) {
+      // Find all video tracks on the stream and toggle their 'enabled' property
+      window.localStream.getVideoTracks().forEach(track => {
+          track.enabled = newVideoState;
+      });
+  }
+};
+
+// Replace your old handleAudio function with this one
+handleAudio = () => {
+  const newAudioState = !this.state.audio;
+  this.setState({ audio: newAudioState }); // This updates the button icon
+
+  if (window.localStream) {
+      // Find all audio tracks on the stream and toggle their 'enabled' property
+      window.localStream.getAudioTracks().forEach(track => {
+          track.enabled = newAudioState;
+      });
+  }
+};
+  handleScreen = () => this.setState({ screen: !this.state.screen }, () => this.getDislayMedia());
+  handlePin = (id) => this.setState((prev) => ({ pinnedId: prev.pinnedId === id ? null : id }));
 
   handleEndCall = () => {
     try {
       let tracks = this.localVideoref.current.srcObject.getTracks();
       tracks.forEach((track) => track.stop());
-    } catch (e) {}
+    } catch (e) { }
     window.location.href = "/";
   };
 
@@ -654,413 +550,636 @@ class Video extends Component {
       return;
     }
     navigator.clipboard.writeText(text).then(
-      function () {
-        message.success("Link copied to clipboard!");
-      },
-      () => {
-        message.error("Failed to copy");
-      }
+      () => message.success("Link copied to clipboard!"),
+      () => message.error("Failed to copy")
     );
   };
 
-  connect = () =>
-    this.setState({ askForUsername: false }, () => this.getMedia());
+  connect = async () => {
+    const { userRole, selectedUserDetails, selectedSubject } = this.state;
+    if(userRole === 'teacher') {
+      if(!selectedSubject || !selectedUserDetails) {
+        message.error("Please select a subject before connecting.");
+        return;
+      }
+    }
+    else{
+      if(!selectedUserDetails) {
+        message.error("Please select a user before connecting.");
+        return;
+      }
+    }
 
-  isSupportedBrowser = function () {
+    // --- TEACHER: CREATE MEETING RECORD ---
+    if (userRole === 'teacher') {
+      console.log('[DEBUG] Teacher connecting. Attempting to create meeting record...');
+      try {
+        const { data, error } = await supabase
+          .from('meetings')
+          .insert({
+            subject: selectedSubject,
+            teacher_name: selectedUserDetails.name,
+            teacher_id: selectedUserDetails.teacher_id,
+            students_doubts: [],
+          })
+          .select('meeting_id')
+          .single();
+        
+        if (error) throw error;
+        
+        const newMeetingId = data.meeting_id;
+        console.log(`[DEBUG] ✅ Supabase returned meeting_id: ${newMeetingId}`);
+        
+        this.setState({ meetingId: newMeetingId }, () => {
+          console.log(`[DEBUG] Teacher's local meetingId state is now: ${this.state.meetingId}`);
+          // Broadcast the meeting ID immediately after setting it
+          if (socket) {
+            const room = window.location.href;
+            console.log(`[DEBUG] Teacher broadcasting meeting ID immediately: ${this.state.meetingId}`);
+            socket.emit('meeting-started', room, this.state.meetingId);
+          }
+        });
+        message.success("Meeting record created!");
+
+      } catch (error) {
+        console.error("[DEBUG] ❌ ERROR creating meeting:", error.message);
+        message.error("Could not create the meeting record.");
+        return;
+      }
+    }
+    
+    // Save to localStorage
+    localStorage.setItem('userDetails', JSON.stringify({
+      subject: selectedSubject, role: userRole, name: selectedUserDetails.name, ...selectedUserDetails
+    }));
+    
+    this.setState({ askForUsername: false }, () => this.getMedia());
+  };
+
+  connectToSocketServer = () => {
+    socket = io.connect(server_url, { secure: true });
+
+    socket.on("signal", this.gotMessageFromServer);
+
+    // Set up all event listeners outside the connect event to avoid duplicates
+    socket.on('meeting-id-received', (receivedMeetingId) => {
+      console.log(`[DEBUG] ✅✅✅ STUDENT RECEIVED MEETING ID: ${receivedMeetingId}`);
+      console.log(`[DEBUG] Current userRole: ${this.state.userRole}`);
+      this.setState({ meetingId: receivedMeetingId }, () => {
+        console.log(`[DEBUG] Student meetingId state is now: ${this.state.meetingId}`);
+      });
+      this.startAnalysis(); 
+    });
+
+    socket.on('request-meeting-id', () => {
+      console.log(`[DEBUG] Received request-meeting-id event. userRole: ${this.state.userRole}, meetingId: ${this.state.meetingId}`);
+      if (this.state.userRole === 'teacher' && this.state.meetingId) {
+        const room = window.location.href;
+        console.log(`[DEBUG] Teacher received request for meeting ID. Broadcasting: ${this.state.meetingId}`);
+        socket.emit('meeting-started', room, this.state.meetingId);
+      }
+    });
+
+    socket.on("user-joined", (id, clients) => {
+      // Re-broadcast your username to ensure the new user gets it
+      socket.emit('username-broadcast', this.state.username);
+
+      // Teacher re-broadcasts the meeting ID when a new user joins
+      if (this.state.userRole === 'teacher' && this.state.meetingId) {
+        const room = window.location.href;
+        console.log(`[DEBUG] New user joined. Teacher re-broadcasting meeting ID: ${this.state.meetingId}`);
+        socket.emit('meeting-started', room, this.state.meetingId);
+      }
+      
+      // --- WebRTC Setup Logic ---
+      clients.forEach((socketListId) => {
+        if (socketListId === socketId) return;
+        connections[socketListId] = new RTCPeerConnection(peerConnectionConfig);
+        connections[socketListId].onicecandidate = (event) => {
+          if (event.candidate != null) {
+            socket.emit("signal", socketListId, JSON.stringify({ ice: event.candidate }));
+          }
+        };
+        connections[socketListId].onaddstream = (event) => {
+          this.setState((prev) => ({ streams: { ...prev.streams, [socketListId]: event.stream } }));
+          // Kick off teacher-side analysis for this remote stream
+          if (this.state.userRole === 'teacher') {
+            // Wait until video element attaches and is ready
+            const tryStart = () => {
+              const ref = this.remoteVideoRefs[socketListId];
+              const el = ref && ref.current;
+              if (el && el.readyState >= 2) {
+                console.log(`[CONFUSION] Starting analysis for ${socketListId}`);
+                this.startTeacherAnalysisFor(socketListId);
+              } else {
+                setTimeout(tryStart, 500);
+              }
+            };
+            tryStart();
+          }
+        };
+        if (window.localStream) {
+          connections[socketListId].addStream(window.localStream);
+        }
+      });
+
+      if (id === socketId) {
+        for (const id2 in connections) {
+          if (id2 === socketId) continue;
+          connections[id2].createOffer().then((description) => {
+            connections[id2].setLocalDescription(description).then(() => {
+              socket.emit("signal", id2, JSON.stringify({ sdp: connections[id2].localDescription }));
+            });
+          });
+        }
+      }
+    });
+
+    socket.on("username-received", (username, fromId) => {
+        this.setState((prev) => ({
+            usernames: { ...prev.usernames, [fromId]: username },
+        }));
+    });
+    socket.on("chat-message", this.addMessage);
+    socket.on("user-left", (id) => {
+        this.setState((prev) => {
+            const streams = { ...prev.streams };
+            delete streams[id];
+            return { ...prev, streams, usernames: { ...prev.usernames, [id]: undefined } };
+        });
+        delete this.remoteVideoRefs[id];
+        // Stop analysis for that user if teacher
+        if (this.state.userRole === 'teacher') {
+          this.stopTeacherAnalysisFor(id);
+        }
+    });
+
+    socket.on("connect", () => {
+      const room = window.location.href;
+      socket.emit("join-call", room);
+      socketId = socket.id;
+      socket.emit('username-broadcast', this.state.username);
+
+      // If you are a teacher, broadcast the meeting ID
+      if (this.state.userRole === 'teacher' && this.state.meetingId) {
+        console.log(`[DEBUG] Teacher socket connected. Broadcasting meeting ID: ${this.state.meetingId}`);
+        socket.emit('meeting-started', room, this.state.meetingId);
+      } else if (this.state.userRole === 'student') {
+          console.log("[DEBUG] Student socket connected. Now listening for 'meeting-id-received'.");
+      }
+
+      // For students: if we don't have a meeting ID after 2 seconds, request it
+      if (this.state.userRole === 'student') {
+        setTimeout(() => {
+          if (!this.state.meetingId) {
+            console.log('[DEBUG] Student still has no meeting ID after 2s. Requesting...');
+            socket.emit('request-meeting-id');
+          }
+        }, 2000);
+        
+        // Also check again after 5 seconds as a fallback
+        setTimeout(() => {
+          if (!this.state.meetingId) {
+            console.log('[DEBUG] Student still has no meeting ID after 5s. Requesting again...');
+            socket.emit('request-meeting-id');
+          }
+        }, 5000);
+      }
+    });
+  };
+
+  isSupportedBrowser = () => {
     let userAgent = (navigator && (navigator.userAgent || "")).toLowerCase();
     let vendor = (navigator && (navigator.vendor || "")).toLowerCase();
-    let isChrome = /google inc/.test(vendor)
-      ? userAgent.match(/(?:chrome|crios)\/(\d+)/)
-      : null;
+    let isChrome = /google inc/.test(vendor) ? userAgent.match(/(?:chrome|crios)\/(\d+)/) : null;
     let isFirefox = userAgent.match(/(?:firefox|fxios)\/(\d+)/);
     return isChrome !== null || isFirefox !== null;
   };
 
-  render() {
-    if (!this.isSupportedBrowser()) {
-      return (
-        <div
-          style={{
-            background: "white",
-            width: "30%",
-            height: "auto",
-            padding: "20px",
-            minWidth: "400px",
-            textAlign: "center",
-            margin: "auto",
-            marginTop: "50px",
-            justifyContent: "center",
-          }}
-        >
-          <h1>
-            Sorry, this app works only with Google Chrome, Mozilla Firefox,
-            Microsoft Edge, or Brave browsers.
-          </h1>
-        </div>
-      );
+  // Starts the analysis loop
+  startAnalysis = () => {
+    if (this.state.userRole === 'student' && !this.state.analysisIntervalId) {
+      const intervalId = setInterval(this.captureFrameAndAnalyze, 5000); // Analyze every 5 seconds
+      this.setState({ analysisIntervalId: intervalId });
+      console.log("Confusion analysis started.");
     }
-    const videoBoxStyle = {
-      position: "relative",
-      display: "inline-block",
-      margin: "10px",
-      width: "320px",
-      height: "180px", // 16:9 aspect ratio
-      background: "#111",
-      borderStyle: "solid",
-      borderColor: "#bdbdbd",
-      borderRadius: "8px",
-      overflow: "hidden",
-      verticalAlign: "top",
-      aspectRatio: "16/9",
+  };
+
+  // Teacher-side: start analysis for a specific remote stream
+  startTeacherAnalysisFor = (socketIdForPeer) => {
+    if (this.state.userRole !== 'teacher') return;
+    if (this.remoteAnalysisIntervals[socketIdForPeer]) return;
+    const run = async () => {
+      const videoElRef = this.remoteVideoRefs[socketIdForPeer];
+      const videoEl = videoElRef && videoElRef.current;
+      const canvas = this.canvasRef.current;
+      if (!videoEl || !canvas || videoEl.readyState < 2) return;
+      try {
+        const w = videoEl.videoWidth;
+        const h = videoEl.videoHeight;
+        if (!w || !h) return;
+        const ctx = canvas.getContext('2d');
+        canvas.width = w;
+        canvas.height = h;
+        ctx.drawImage(videoEl, 0, 0, w, h);
+        const dataUrl = canvas.toDataURL('image/jpeg');
+        const base64Data = dataUrl.split(',')[1];
+        const resp = await fetch('http://localhost:5000/predict', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: base64Data })
+        });
+        if (!resp.ok) {
+          console.warn(`[CONFUSION] API HTTP ${resp.status} for ${socketIdForPeer}`);
+          return;
+        }
+        const json = await resp.json();
+        if (!json || !json.faces) {
+          console.warn(`[CONFUSION] No faces field in response for ${socketIdForPeer}`);
+        }
+        let label = 'No Face';
+        let mainEmotion = undefined;
+        if (json && json.faces && json.faces.length > 0) {
+          const first = json.faces[0];
+          label = first.confusion || 'Not Confused';
+          mainEmotion = first.main_emotion;
+        }
+        this.setState((prev) => ({
+          confusionBySocketId: {
+            ...prev.confusionBySocketId,
+            [socketIdForPeer]: { label, mainEmotion, ts: Date.now() }
+          }
+        }));
+      } catch (e) {
+        console.warn(`[CONFUSION] Error analyzing ${socketIdForPeer}:`, e);
+      }
     };
-    const nameLabelStyle = {
-      position: "absolute",
-      left: 0,
-      bottom: 0,
-      width: "100%",
-      background: "rgba(0,0,0,0.7)",
-      color: "white",
-      padding: "4px 0",
-      textAlign: "center",
-      fontWeight: "bold",
-      fontSize: "16px",
-      zIndex: 2,
-      borderBottomLeftRadius: "8px",
-      borderBottomRightRadius: "8px",
-      overflow: "hidden",
-      whiteSpace: "nowrap",
-      textOverflow: "ellipsis",
+    // Run immediately once, then set interval
+    run();
+    this.remoteAnalysisIntervals[socketIdForPeer] = setInterval(run, 5000);
+  };
+
+stopTeacherAnalysisFor = (socketIdForPeer) => {
+    // Check if an analysis interval for this specific peer exists
+    if (this.remoteAnalysisIntervals[socketIdForPeer]) {
+        console.log(`[CONFUSION] Stopping analysis for ${socketIdForPeer}`);
+        
+        // Use the stored ID to clear the interval
+        clearInterval(this.remoteAnalysisIntervals[socketIdForPeer]);
+        
+        // Remove the property from the intervals object to clean up
+        delete this.remoteAnalysisIntervals[socketIdForPeer];
+    }
+};
+
+
+  // Stops the analysis loop
+  stopAnalysis = () => {
+    if (this.state.analysisIntervalId) {
+      clearInterval(this.state.analysisIntervalId);
+      this.setState({ analysisIntervalId: null });
+      console.log("Confusion analysis stopped.");
+    }
+  };
+
+  // Captures a frame, sends it to the API, and handles the result
+  captureFrameAndAnalyze = async () => {
+    const video = this.localVideoref.current;
+    const canvas = this.canvasRef.current;
+    if (!video || !canvas || video.paused || video.ended || video.readyState < 4) {
+      return;
+    }
+
+    const context = canvas.getContext('2d');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    const imageData = canvas.toDataURL('image/jpeg').split(',')[1];
+
+    try {
+      const response = await fetch('http://localhost:5000/predict', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: imageData }),
+      });
+      const result = await response.json();
+
+      if (result.faces && result.faces.length > 0) {
+        const firstFace = result.faces[0];
+        if (firstFace.confusion === 'Confused' && !this.state.showConfusionModal) {
+          this.setState({ showConfusionModal: true });
+        }
+      }
+    } catch (error) {
+      console.error("Error calling analysis API:", error);
+    }
+  };
+
+  submitDoubt = async () => {
+    // This log is the most important one for debugging the error
+    console.log(`[DEBUG] Submit Doubt button clicked. Current meetingId is: ${this.state.meetingId}`);
+
+    if (!this.state.confusionDoubtText.trim()) {
+      message.error("Please describe your doubt.");
+      return;
+    }
+    
+    // If no meeting ID, try to request it first
+    if (!this.state.meetingId) {
+      console.log('[DEBUG] No meeting ID found. Requesting from teacher...');
+      if (this.state.userRole === 'student' && socket) {
+        socket.emit('request-meeting-id');
+        // Wait a bit and try again
+        setTimeout(() => {
+          if (!this.state.meetingId) {
+            message.error("Cannot submit doubt: meeting not initialized. Please wait for the teacher to start the session.");
+          } else {
+            this.submitDoubt(); // Retry with the new meeting ID
+          }
+        }, 1000);
+      } else {
+        message.error("Cannot submit doubt: meeting not initialized.");
+      }
+      return;
+    }
+    
+    const userDetails = JSON.parse(localStorage.getItem('userDetails'));
+    const newDoubt = {
+      student_name: userDetails.name,
+      student_id: userDetails.roll_no || userDetails.email, 
+      doubt: this.state.confusionDoubtText,
+      solve: "NULL",
     };
-    // If a video is pinned, show only that video (and local if pinned is local)
+
+    const { error } = await supabase.rpc('append_student_doubt', {
+      meeting_id_arg: this.state.meetingId,
+      new_doubt_arg: newDoubt,
+    });
+
+    if (error) {
+      message.error("Could not submit your doubt.");
+      console.error("Error submitting doubt via RPC:", error);
+    } else {
+      message.success("Your doubt has been submitted to the teacher.");
+      this.setState({ showConfusionModal: false, confusionDoubtText: '' });
+    }
+  };
+
+  render() {
     const { pinnedId } = this.state;
+
+    // The full UI is wrapped in a single div to contain the modals and canvas
     return (
       <div>
-        {this.state.askForUsername === true ? (
+        {/* Hidden canvas for capturing video frames for AI analysis */}
+        <canvas ref={this.canvasRef} style={{ display: 'none' }}></canvas>
+
+        {/* Modal for the confusion tracker popup */}
+        <Modal show={this.state.showConfusionModal} onHide={() => this.setState({ showConfusionModal: false })}>
+          <Modal.Header closeButton>
+            <Modal.Title>Feeling Confused?</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            <p>It looks like you might be confused. Please describe your doubt below, and your teacher will be notified.</p>
+            <TextField
+              fullWidth
+              multiline
+              rows={4}
+              variant="outlined"
+              label="What's your confusion?"
+              value={this.state.confusionDoubtText}
+              onChange={(e) => this.setState({ confusionDoubtText: e.target.value })}
+            />
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="text" onClick={() => this.setState({ showConfusionModal: false })}>
+              Cancel
+            </Button>
+            <Button variant="contained" color="primary" onClick={this.submitDoubt}>
+              Submit Doubt
+            </Button>
+          </Modal.Footer>
+        </Modal>
+
+        {/* Conditional rendering for the "Join Call" screen */}
+        {this.state.askForUsername ? (
           <div>
-            <div
-              style={{
-                background: "white",
-                width: "30%",
-                height: "auto",
-                padding: "20px",
-                minWidth: "400px",
-                textAlign: "center",
-                margin: "auto",
-                marginTop: "50px",
-                justifyContent: "center",
-              }}
-            >
-              <p
-                style={{ margin: 0, fontWeight: "bold", paddingRight: "50px" }}
-              >
-                Set your username
-              </p>
-              <Input
-                placeholder="Username"
-                value={this.state.username}
-                onChange={(e) => this.handleUsername(e)}
-              />
-              <Button
-                variant="contained"
-                color="primary"
-                onClick={this.connect}
-                style={{ margin: "20px" }}
-              >
+            <div className="username-prompt-container">
+              <Typography variant="h6">1. Join Call As...</Typography>
+              <ToggleButtonGroup value={this.state.userRole} exclusive onChange={this.handleRoleChange} style={{ margin: '15px 0' }}>
+                <ToggleButton value="teacher">Teacher</ToggleButton>
+                <ToggleButton value="student">Student</ToggleButton>
+              </ToggleButtonGroup>
+
+              {this.state.userRole === 'teacher' && (
+                <div style={{ marginTop: '20px' }}>
+                  <Typography variant="h6">2. Select Subject</Typography>
+                  <TextField select label="Subject" value={this.state.selectedSubject} onChange={this.handleSubjectChange} variant="outlined" style={{ width: 300, margin: '10px auto' }}>
+                    <MenuItem value="" disabled><em>Please select a subject...</em></MenuItem>
+                    {this.state.availableSubjects.map((subject) => (<MenuItem key={subject} value={subject}>{subject}</MenuItem>))}
+                  </TextField>
+                </div>
+              )}
+
+              {/* {(this.state.userRole === 'teacher' ? !!this.state.selectedSubject : this.state.userRole === 'student') && (
+                <div style={{ marginTop: '20px' }}>
+                  <Typography variant="h6">3. Select Your Name</Typography>
+                  <Autocomplete
+                    options={this.state.searchOptions}
+                    getOptionLabel={(option) => option.name || ""}
+                    value={this.state.selectedUserDetails}
+                    onChange={(event, newValue) => this.handleUsernameSelection(newValue)}
+                    onInputChange={(event, newInputValue) => this.handleNameSearch(newInputValue)}
+                    loading={this.state.loading}
+                    style={{ width: 300, margin: '10px auto' }}
+                    renderInput={(params) => (
+                      <TextField {...params} label={`Search for a ${this.state.userRole}...`} variant="outlined" InputProps={{
+                        ...params.InputProps,
+                        endAdornment: (<>{this.state.loading ? <CircularProgress color="inherit" size={20} /> : null}{params.InputProps.endAdornment}</>),
+                      }} />
+                    )}
+                  />
+                </div>
+              )} */}
+
+                            {/* --- CORRECTED RENDER LOGIC --- */}
+              {/* Name search shows for students, OR for teachers AFTER they've selected a subject */}
+              {(this.state.userRole === 'student' || (this.state.userRole === 'teacher' && this.state.selectedSubject)) && (
+                <div style={{ marginTop: '20px' }}>
+                    <Typography variant="h6" className="username-prompt-label">
+                        {this.state.userRole === 'teacher' ? '3. Select Your Name' : '2. Select Your Name'}
+                    </Typography>
+                    <Autocomplete
+                        style={{ width: 300, margin: '10px auto' }}
+                        options={this.state.searchOptions}
+                        getOptionLabel={(option) => option.name || ""}
+                        value={this.state.selectedUserDetails}
+                        onChange={(event, newValue) => this.handleUsernameSelection(newValue)}
+                        onInputChange={(event, newInputValue) => this.handleNameSearch(newInputValue)}
+                        loading={this.state.loading}
+                        renderInput={(params) => (
+                        <TextField
+                            {...params}
+                            label={`Search for a ${this.state.userRole}...`}
+                            variant="outlined"
+                            InputProps={{
+                            ...params.InputProps,
+                            endAdornment: (
+                                <>
+                                {this.state.loading ? <CircularProgress color="inherit" size={20} /> : null}
+                                {params.InputProps.endAdornment}
+                                </>
+                            ),
+                            }}
+                        />
+                        )}
+                    />
+                </div>
+              )}
+              {/* --- END CORRECTION --- */}
+
+
+              <Button variant="contained" color="primary" onClick={this.connect} className="connect-button" style={{ marginTop: '20px' }} disabled={!this.state.username || (this.state.userRole === 'teacher' && !this.state.selectedSubject)}>
                 Connect
               </Button>
             </div>
-
-            <div
-              style={{
-                justifyContent: "center",
-                textAlign: "center",
-                paddingTop: "40px",
-              }}
-            >
-              <video
-                id="my-video"
-                ref={this.localVideoref}
-                autoPlay
-                muted
-                style={{
-                  borderStyle: "solid",
-                  borderColor: "#bdbdbd",
-                  objectFit: "fill",
-                  width: "60%",
-                  height: "30%",
-                }}
-              ></video>
+            <div className="video-preview-container">
+              <video ref={this.localVideoref} autoPlay muted className="video-preview"></video>
             </div>
           </div>
         ) : (
+          // Main Video Call UI
           <div>
-            <div
-              className="btn-down"
-              style={{
-                backgroundColor: "whitesmoke",
-                color: "whitesmoke",
-                textAlign: "center",
-              }}
-            >
-              <IconButton
-                style={{ color: "#424242" }}
-                onClick={this.handleVideo}
-              >
-                {this.state.video === true ? (
-                  <VideocamIcon />
-                ) : (
-                  <VideocamOffIcon />
-                )}
-              </IconButton>
-
-              <IconButton
-                style={{ color: "#f44336" }}
-                onClick={this.handleEndCall}
-              >
-                <CallEndIcon />
-              </IconButton>
-
-              <IconButton
-                style={{ color: "#424242" }}
-                onClick={this.handleAudio}
-              >
-                {this.state.audio === true ? <MicIcon /> : <MicOffIcon />}
-              </IconButton>
-
-              {this.state.screenAvailable === true ? (
-                <IconButton
-                  style={{ color: "#424242" }}
-                  onClick={this.handleScreen}
-                >
-                  {this.state.screen === true ? (
-                    <ScreenShareIcon />
-                  ) : (
-                    <StopScreenShareIcon />
-                  )}
-                </IconButton>
-              ) : null}
-
-              <Badge
-                badgeContent={this.state.newmessages}
-                max={999}
-                color="secondary"
-                onClick={this.openChat}
-              >
-                <IconButton
-                  style={{ color: "#424242" }}
-                  onClick={this.openChat}
-                >
-                  <ChatIcon />
-                </IconButton>
+            <div className="btn-down">
+              <IconButton onClick={this.handleVideo}>{this.state.video ? <VideocamIcon /> : <VideocamOffIcon />}</IconButton>
+              <IconButton style={{ color: "#f44336" }} onClick={this.handleEndCall}><CallEndIcon /></IconButton>
+              <IconButton onClick={this.handleAudio}>{this.state.audio ? <MicIcon /> : <MicOffIcon />}</IconButton>
+              {this.state.screenAvailable && <IconButton onClick={this.handleScreen}>{this.state.screen ? <StopScreenShareIcon /> : <ScreenShareIcon />}</IconButton>}
+              <Badge badgeContent={this.state.newmessages} max={999} color="secondary" onClick={this.openChat}>
+                <IconButton onClick={this.openChat}><ChatIcon /></IconButton>
               </Badge>
             </div>
 
-            <Modal
-              show={this.state.showModal}
-              onHide={this.closeChat}
-              style={{ zIndex: "999999" }}
-            >
-              <Modal.Header closeButton>
-                <Modal.Title>Chat Room</Modal.Title>
-              </Modal.Header>
-              <Modal.Body
-                style={{
-                  overflow: "auto",
-                  overflowY: "auto",
-                  height: "400px",
-                  textAlign: "left",
-                }}
-              >
-                {this.state.messages.length > 0 ? (
-                  this.state.messages.map((item, index) => (
-                    <div key={index} style={{ textAlign: "left" }}>
-                      <p style={{ wordBreak: "break-all" }}>
-                        <b>{item.sender}</b>: {item.data}
-                      </p>
-                    </div>
-                  ))
-                ) : (
-                  <p>No message yet</p>
-                )}
+            <Modal show={this.state.showModal} onHide={this.closeChat} className="chat-modal">
+              <Modal.Header closeButton><Modal.Title>Chat Room</Modal.Title></Modal.Header>
+              <Modal.Body style={{ overflowY: 'auto', height: '400px' }}>
+                {this.state.messages.length > 0 ? this.state.messages.map((item, index) => (
+                  <div key={index}><p><b>{item.sender}</b>: {item.data}</p></div>
+                )) : <p>No messages yet.</p>}
               </Modal.Body>
               <Modal.Footer className="div-send-msg">
-                <Input
-                  placeholder="Message"
-                  value={this.state.message}
-                  onChange={(e) => this.handleMessage(e)}
-                />
-                <Button
-                  variant="contained"
-                  color="primary"
-                  onClick={this.sendMessage}
-                >
-                  Send
-                </Button>
+                <Input placeholder="Message" value={this.state.message} onChange={this.handleMessage} />
+                <Button variant="contained" color="primary" onClick={this.sendMessage}>Send</Button>
               </Modal.Footer>
             </Modal>
 
             <div className="container">
-              <div style={{ paddingTop: "20px" }}>
-                <Input value={window.location.href} disable="true"></Input>
-                <Button
-                  style={{
-                    backgroundColor: "#3f51b5",
-                    color: "whitesmoke",
-                    marginLeft: "20px",
-                    marginTop: "10px",
-                    width: "120px",
-                    fontSize: "10px",
-                  }}
-                  onClick={this.copyUrl}
-                >
-                  Copy invite link
-                </Button>
-              </div>
-              <Row
-                id="main"
-                className="flex-container"
-                style={{
-                  margin: 0,
-                  padding: 0,
-                  justifyContent: pinnedId ? "center" : undefined,
-                }}
-              >
-                {/* Local video with username */}
+              <Row id="main" className="flex-container" style={{ justifyContent: pinnedId ? "center" : undefined }}>
+                {/* {(!pinnedId || pinnedId === "local") && (
+                <div className={`video-box ${pinnedId === "local" ? "pinned" : ""}`}>
+                  <video id="my-video" ref={this.localVideoref} autoPlay muted controls={false}></video>
+                  <span className="name-label">{this.state.username || "Me"}</span>
+                  <IconButton className="pin-button" onClick={() => this.handlePin("local")} size="small">
+                    <PushPinIcon color={pinnedId === "local" ? "primary" : "action"} />
+                  </IconButton>
+                </div>
+              )} */}
+                {/* This is your existing local video tile */}
                 {(!pinnedId || pinnedId === "local") && (
                   <div
-                    data-wrapper="local"
-                    style={{
-                      ...videoBoxStyle,
-                      width:
-                        pinnedId === "local" ? "640px" : videoBoxStyle.width,
-                      height:
-                        pinnedId === "local" ? "480px" : videoBoxStyle.height,
-                    }}
+                    className={`video-box ${pinnedId === "local" ? "pinned" : ""}`}
+                    style={{ position: "relative" }} // Ensure parent container is relative
                   >
-                    <video
-                      id="my-video"
-                      ref={this.localVideoref}
-                      autoPlay
-                      muted
-                      controls={false}
-                      disablePictureInPicture
-                      controlsList="nodownload nofullscreen noremoteplayback"
-                      style={{
-                        width: "100%",
-                        height: "100%",
-                        objectFit: "cover",
-                        background: "#111",
-                      }}
-                    ></video>
-                    <span style={nameLabelStyle}>
-                      {this.state.username || "Me"}
-                    </span>
-                    <IconButton
-                      style={{
-                        position: "absolute",
-                        top: 8,
-                        right: 8,
-                        zIndex: 3,
-                        background: "#fff",
-                        border: "1px solid #1976d2",
-                        boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
-                        padding: 4,
-                      }}
-                      onClick={() => this.handlePin("local")}
-                      size="small"
-                    >
-                      <PushPinIcon
-                        color={pinnedId === "local" ? "primary" : "action"}
-                      />
-                    </IconButton>
-                  </div>
-                )}
-                {/* Remote videos with usernames */}
-                {Object.entries(this.state.streams).map(([id, stream]) => {
-                  if (!this.remoteVideoRefs[id])
-                    this.remoteVideoRefs[id] = React.createRef();
-                  const username = this.state.usernames[id] || "User";
-                  if (pinnedId && pinnedId !== id) return null;
-                  return (
-                    <div
-                      key={id}
-                      data-wrapper={id}
-                      style={{
-                        ...videoBoxStyle,
-                        width: pinnedId === id ? "640px" : videoBoxStyle.width,
-                        height:
-                          pinnedId === id ? "360px" : videoBoxStyle.height,
-                      }}
-                    >
-                      {/* Video or placeholder */}
-                      {stream &&
-                      stream.getVideoTracks().length > 0 &&
-                      stream.getVideoTracks()[0].enabled ? (
-                        <video
-                          data-socket={id}
-                          ref={(el) => {
-                            this.remoteVideoRefs[id].current = el;
-                            if (el && el.srcObject !== stream) {
-                              el.srcObject = stream;
-                            }
-                          }}
-                          autoPlay
-                          playsInline
-                          controls={false}
-                          disablePictureInPicture
-                          controlsList="nodownload nofullscreen noremoteplayback"
+                    <video id="my-video" ref={this.localVideoref} autoPlay muted controls={false}></video>
+                    <span className="name-label">{this.state.username || "Me"}</span>
+
+                    {this.state.userRole === "student" && (
+                      <>
+                        <IconButton
+                          title="I have a doubt"
                           style={{
-                            width: "100%",
-                            height: "100%",
-                            objectFit: "cover",
-                            background: "#111",
-                            borderRadius: "8px",
-                            display: "block",
+                            position: "absolute",
+                            top: "8px",
+                            left: "8px", // Left corner
+                            zIndex: 3,
+                            background: "rgba(255,255,255,0.8)",
                           }}
-                        ></video>
-                      ) : (
+                          onClick={() => this.setState({ showConfusionModal: true })}
+                          size="small"
+                        >
+                          <HelpOutlineIcon color="primary" />
+                        </IconButton>
+                        
+                        {/* Meeting Status Indicator */}
                         <div
                           style={{
-                            width: "100%",
-                            height: "100%",
-                            background: "#222",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            color: "#888",
-                            fontSize: "24px",
-                            flexDirection: "column",
-                            borderRadius: "8px",
+                            position: "absolute",
+                            top: "8px",
+                            right: "8px",
+                            zIndex: 3,
+                            background: this.state.meetingId ? "rgba(76, 175, 80, 0.9)" : "rgba(244, 67, 54, 0.9)",
+                            color: "white",
+                            padding: "4px 8px",
+                            borderRadius: "12px",
+                            fontSize: "10px",
+                            fontWeight: "bold",
                           }}
                         >
-                          <span style={{ fontSize: 48, marginBottom: 8 }}>
-                            📷
-                          </span>
-                          <span
-                            style={{ fontWeight: "bold", letterSpacing: 2 }}
-                          >
-                            NO VIDEO
-                          </span>
+                          {this.state.meetingId ? "✓ Connected" : "⏳ Connecting..."}
+                        </div>
+                      </>
+                    )}
+
+                    <IconButton className="pin-button" onClick={() => this.handlePin("local")} size="small">
+                      <PushPinIcon color={pinnedId === "local" ? "primary" : "action"} />
+                    </IconButton>
+                  </div>
+
+                )}
+
+                {Object.entries(this.state.streams).map(([id, stream]) => {
+                  if (!this.remoteVideoRefs[id]) this.remoteVideoRefs[id] = React.createRef();
+                  if (pinnedId && pinnedId !== id) return null;
+                  const username = this.state.usernames[id] || "User";
+                  const confusion = this.state.confusionBySocketId[id];
+                  const badgeBg = confusion ? (confusion.label === 'Confused' ? 'rgba(244,67,54,0.9)' : 'rgba(76,175,80,0.9)') : 'rgba(0,0,0,0.4)';
+                  return (
+                    <div key={id} className={`video-box ${pinnedId === id ? "pinned" : ""}`}>
+                      {stream && stream.getVideoTracks().length > 0 && stream.getVideoTracks()[0].enabled ? (
+                        <video
+                          ref={el => { this.remoteVideoRefs[id].current = el; if (el && el.srcObject !== stream) { el.srcObject = stream; } }}
+                          autoPlay playsInline controls={false}
+                        ></video>
+                      ) : (
+                        <div className="no-video-placeholder">
+                          <span className="icon">📷</span>
+                          <span className="text">NO VIDEO</span>
                         </div>
                       )}
-                      <span style={nameLabelStyle}>{username}</span>
-                      <IconButton
-                        style={{
-                          position: "absolute",
-                          top: 8,
-                          right: 8,
-                          zIndex: 3,
-                          background: "#fff",
-                          border: "1px solid #1976d2",
-                          boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
-                          padding: 4,
-                        }}
-                        onClick={() => this.handlePin(id)}
-                        size="small"
-                      >
-                        <PushPinIcon
-                          color={pinnedId === id ? "primary" : "action"}
-                        />
+                      {/* Confusion badge for teacher view */}
+                      {this.state.userRole === 'teacher' && (
+                        <div
+                          style={{
+                            position: 'absolute',
+                            top: '8px',
+                            left: '8px',
+                            zIndex: 3,
+                            background: badgeBg,
+                            color: 'white',
+                            padding: '4px 8px',
+                            borderRadius: '12px',
+                            fontSize: '10px',
+                            fontWeight: 'bold'
+                          }}
+                          title={confusion && confusion.mainEmotion ? `Emotion: ${confusion.mainEmotion}` : ''}
+                        >
+                          {confusion ? (confusion.label === 'Confused' ? 'Confused' : 'Not Confused') : 'Analyzing...'}
+                        </div>
+                      )}
+                      <span className="name-label">{username}</span>
+                      <IconButton className="pin-button" onClick={() => this.handlePin(id)} size="small">
+                        <PushPinIcon color={pinnedId === id ? "primary" : "action"} />
                       </IconButton>
                     </div>
                   );

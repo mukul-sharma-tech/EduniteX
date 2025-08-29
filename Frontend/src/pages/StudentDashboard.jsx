@@ -11,6 +11,34 @@ const StudentDashboard = () => {
 
   const email = localStorage.getItem("eduassist_user_email");
 
+
+  const [meetings, setMeetings] = useState([]);
+
+useEffect(() => {
+  if (!student?.id) return;
+
+  const fetchMeetings = async () => {
+    const { data, error } = await supabase
+      .from("meetings")
+      .select("meeting_id, subject, teacher_name, students_doubts, created_at")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Error fetching meetings:", error);
+    } else {
+      // Filter only meetings where this student's ID appears in doubts
+      const filtered = data.filter(meeting => {
+        return meeting.students_doubts?.some(
+          d => d.student_id === student.id
+        );
+      });
+      setMeetings(filtered);
+    }
+  };
+
+  fetchMeetings();
+}, [student]);
+
   useEffect(() => {
     const fetchStudentData = async () => {
       if (!email) return;
@@ -123,6 +151,44 @@ const StudentDashboard = () => {
             <p className="text-gray-600">No weaknesses recorded yet.</p>
           )}
         </div>
+        {/* 📝 Meetings & Doubts */}
+<div className="mt-10">
+  <h2 className="text-2xl font-semibold mb-4 flex items-center gap-2 text-purple-600">
+    <Info className="text-purple-500" /> Your Doubts in Meetings
+  </h2>
+  {meetings.length ? (
+    meetings.map((meeting) => {
+      const studentDoubts = meeting.students_doubts.filter(
+        d => d.student_id === student.id
+      );
+
+      return (
+        <div
+          key={meeting.meeting_id}
+          className="bg-white/70 border border-purple-200 shadow rounded-lg p-4 mb-4"
+        >
+          <h3 className="text-lg font-bold text-purple-700">
+            {meeting.subject}
+          </h3>
+          <p className="text-sm text-gray-600 mb-2">
+            Teacher: {meeting.teacher_name} | {new Date(meeting.created_at).toLocaleString()}
+          </p>
+          <ul className="list-disc ml-6 text-gray-800">
+            {studentDoubts.map((d, i) => (
+              <li key={i}>
+                <strong>Doubt:</strong> {d.doubt} <br />
+                <strong>Solution:</strong> {d.solve || "Not answered yet"}
+              </li>
+            ))}
+          </ul>
+        </div>
+      );
+    })
+  ) : (
+    <p className="text-gray-600">No doubts recorded in your meetings yet.</p>
+  )}
+</div>
+
       </div>
     </motion.div>
   );
