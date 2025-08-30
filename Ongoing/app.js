@@ -172,6 +172,13 @@ socket.on('request-meeting-id', () => {
 // 	console.log("listening on", app.get('port'))
 // })
 
-server.listen(app.get('port'), '0.0.0.0', () => {
-  console.log("listening on", app.get('port'));
+// server.listen(app.get('port'), '0.0.0.0', () => {
+//   console.log("listening on", app.get('port'));
+// });
+
+
+
+const PORT = process.env.PORT || 10000; // fallback only for local dev
+server.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
