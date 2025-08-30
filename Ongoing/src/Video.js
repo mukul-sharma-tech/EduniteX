@@ -59,6 +59,12 @@ class Video extends Component {
       meetingId: null, // To store the ID of the current meeting
       // --- NEW: teacher-side per-student confusion map ---
       confusionBySocketId: {}, // { [socketId]: { label: 'Confused'|'Not Confused'|'No Face', mainEmotion?: string, ts: number } }
+      // --- NEW STATE FOR AI SOLUTION ---
+      showAISolutionModal: false,
+      aiSolution: '',
+      originalDoubt: '',
+      // --- NEW STATE FOR DOUBT NOTIFICATIONS ---
+      doubtNotifications: {}, // { [socketId]: boolean }
     };
 
     this.canvasRef = React.createRef(); // Add a ref for our hidden canvas
@@ -619,6 +625,17 @@ handleAudio = () => {
   connectToSocketServer = () => {
     socket = io.connect(server_url, { secure: true });
 
+    // Remove any existing event listeners to prevent duplicates
+    socket.off("signal");
+    socket.off("doubt-notification");
+    socket.off("meeting-id-received");
+    socket.off("request-meeting-id");
+    socket.off("user-joined");
+    socket.off("username-received");
+    socket.off("chat-message");
+    socket.off("user-left");
+    socket.off("connect");
+
     socket.on("signal", this.gotMessageFromServer);
 
     // Set up all event listeners outside the connect event to avoid duplicates
@@ -712,6 +729,52 @@ handleAudio = () => {
         if (this.state.userRole === 'teacher') {
           this.stopTeacherAnalysisFor(id);
         }
+    });
+
+    // Handle doubt notifications for teachers
+    socket.on("doubt-notification", (data) => {
+      console.log('[DEBUG] Received doubt notification:', data);
+      console.log('[DEBUG] Current userRole:', this.state.userRole);
+      console.log('[DEBUG] Current usernames:', this.state.usernames);
+      
+      if (this.state.userRole === 'teacher') {
+        console.log('[DEBUG] Teacher role confirmed, showing notification');
+        message.info(`${data.studentName} has submitted a doubt: "${data.doubt}"`);
+        
+        // Find the socket ID for this student and show visual notification
+        const studentSocketId = Object.keys(this.state.usernames).find(
+          id => this.state.usernames[id] === data.studentName
+        );
+        
+        console.log('[DEBUG] Found student socket ID:', studentSocketId, 'for student:', data.studentName);
+        
+        if (studentSocketId) {
+          console.log('[DEBUG] Setting doubt notification for socket ID:', studentSocketId);
+          this.setState(prev => ({
+            doubtNotifications: {
+              ...prev.doubtNotifications,
+              [studentSocketId]: true
+            }
+          }));
+          
+          // Clear the notification after 10 seconds
+          setTimeout(() => {
+            console.log('[DEBUG] Clearing doubt notification for socket ID:', studentSocketId);
+            this.setState(prev => ({
+              doubtNotifications: {
+                ...prev.doubtNotifications,
+                [studentSocketId]: false
+              }
+            }));
+          }, 10000);
+        } else {
+          console.log('[DEBUG] Could not find student socket ID for notification');
+          console.log('[DEBUG] Available usernames:', this.state.usernames);
+          console.log('[DEBUG] Looking for student name:', data.studentName);
+        }
+      } else {
+        console.log('[DEBUG] Not a teacher, ignoring doubt notification');
+      }
     });
 
     socket.on("connect", () => {
@@ -905,24 +968,91 @@ stopTeacherAnalysisFor = (socketIdForPeer) => {
     }
     
     const userDetails = JSON.parse(localStorage.getItem('userDetails'));
+    const doubtText = this.state.confusionDoubtText;
     const newDoubt = {
       student_name: userDetails.name,
       student_id: userDetails.roll_no || userDetails.email, 
-      doubt: this.state.confusionDoubtText,
-      solve: "NULL",
+      doubt: doubtText,
     };
 
-    const { error } = await supabase.rpc('append_student_doubt', {
-      meeting_id_arg: this.state.meetingId,
-      new_doubt_arg: newDoubt,
-    });
+    try {
+      // First, save to database
+      const { error } = await supabase.rpc('append_student_doubt', {
+        meeting_id_arg: this.state.meetingId,
+        new_doubt_arg: newDoubt,
+      });
 
-    if (error) {
-      message.error("Could not submit your doubt.");
-      console.error("Error submitting doubt via RPC:", error);
-    } else {
+      if (error) {
+        message.error("Could not submit your doubt.");
+        console.error("Error submitting doubt via RPC:", error);
+        return;
+      }
+
+      // Send notification to teacher
+      if (socket) {
+        console.log('[DEBUG] Sending doubt notification to teacher:', {
+          studentName: userDetails.name,
+          doubt: doubtText,
+          meetingId: this.state.meetingId
+        });
+        socket.emit('student-doubt-submitted', {
+          studentName: userDetails.name,
+          doubt: doubtText,
+          meetingId: this.state.meetingId
+        });
+      } else {
+        console.error('[DEBUG] Socket not available for doubt notification');
+      }
+
+      // Get instant AI solution
+      this.getInstantAISolution(doubtText, userDetails.name);
+
       message.success("Your doubt has been submitted to the teacher.");
       this.setState({ showConfusionModal: false, confusionDoubtText: '' });
+    } catch (error) {
+      console.error("Error in submitDoubt:", error);
+      message.error("Could not submit your doubt.");
+    }
+  };
+
+  getInstantAISolution = async (doubtText, studentName) => {
+    console.log('[DEBUG] Getting AI solution for:', doubtText, studentName);
+    try {
+             const response = await fetch('http://localhost:5001/solve-doubt', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          doubt: doubtText,
+          studentName: studentName,
+          subject: this.state.selectedSubject || 'General'
+        }),
+      });
+
+      console.log('[DEBUG] AI solution response status:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[DEBUG] AI solution error response:', errorText);
+        throw new Error('Failed to get AI solution');
+      }
+
+      const result = await response.json();
+      console.log('[DEBUG] AI solution result:', result);
+      
+      // Show AI solution in a modal
+      this.setState({
+        showAISolutionModal: true,
+        aiSolution: result.solution,
+        originalDoubt: doubtText
+      });
+
+      console.log('[DEBUG] AI solution modal should be shown now');
+
+    } catch (error) {
+      console.error('Error getting AI solution:', error);
+      // Don't show error to user as this is a bonus feature
     }
   };
 
@@ -958,6 +1088,32 @@ stopTeacherAnalysisFor = (socketIdForPeer) => {
             </Button>
             <Button variant="contained" color="primary" onClick={this.submitDoubt}>
               Submit Doubt
+            </Button>
+          </Modal.Footer>
+        </Modal>
+
+        {/* Modal for AI Solution */}
+        <Modal show={this.state.showAISolutionModal} onHide={() => this.setState({ showAISolutionModal: false })} size="lg">
+          <Modal.Header closeButton>
+            <Modal.Title>🤖 Instant AI Solution</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            <div style={{ marginBottom: '20px' }}>
+              <Typography variant="h6" color="primary">Your Doubt:</Typography>
+              <Typography variant="body1" style={{ fontStyle: 'italic', marginTop: '5px' }}>
+                "{this.state.originalDoubt}"
+              </Typography>
+            </div>
+            <div>
+              <Typography variant="h6" color="success.main">AI Solution:</Typography>
+              <Typography variant="body1" style={{ marginTop: '10px', whiteSpace: 'pre-wrap' }}>
+                {this.state.aiSolution}
+              </Typography>
+            </div>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="contained" color="primary" onClick={() => this.setState({ showAISolutionModal: false })}>
+              Got it!
             </Button>
           </Modal.Footer>
         </Modal>
@@ -1094,22 +1250,47 @@ stopTeacherAnalysisFor = (socketIdForPeer) => {
                     <video id="my-video" ref={this.localVideoref} autoPlay muted controls={false}></video>
                     <span className="name-label">{this.state.username || "Me"}</span>
 
-                    {this.state.userRole === "student" && (
-                      <>
-                        <IconButton
-                          title="I have a doubt"
-                          style={{
-                            position: "absolute",
-                            top: "8px",
-                            left: "8px", // Left corner
-                            zIndex: 3,
-                            background: "rgba(255,255,255,0.8)",
-                          }}
-                          onClick={() => this.setState({ showConfusionModal: true })}
-                          size="small"
-                        >
-                          <HelpOutlineIcon color="primary" />
-                        </IconButton>
+                                         {this.state.userRole === "student" && (
+                       <>
+                         <IconButton
+                           title="I have a doubt"
+                           style={{
+                             position: "absolute",
+                             top: "8px",
+                             left: "8px", // Left corner
+                             zIndex: 3,
+                             background: "rgba(255,255,255,0.8)",
+                           }}
+                           onClick={() => this.setState({ showConfusionModal: true })}
+                           size="small"
+                         >
+                           <HelpOutlineIcon color="primary" />
+                         </IconButton>
+                         
+                         {/* Test notification button for debugging */}
+                         <IconButton
+                           title="Test notification"
+                           style={{
+                             position: "absolute",
+                             top: "8px",
+                             left: "50px", // Next to doubt button
+                             zIndex: 3,
+                             background: "rgba(255,255,255,0.8)",
+                           }}
+                           onClick={() => {
+                             console.log('[DEBUG] Test notification clicked');
+                             if (socket) {
+                               socket.emit('student-doubt-submitted', {
+                                 studentName: this.state.username,
+                                 doubt: "Test doubt for debugging",
+                                 meetingId: this.state.meetingId
+                               });
+                             }
+                           }}
+                           size="small"
+                         >
+                           🧪
+                         </IconButton>
                         
                         {/* Meeting Status Indicator */}
                         <div
@@ -1134,6 +1315,28 @@ stopTeacherAnalysisFor = (socketIdForPeer) => {
                     <IconButton className="pin-button" onClick={() => this.handlePin("local")} size="small">
                       <PushPinIcon color={pinnedId === "local" ? "primary" : "action"} />
                     </IconButton>
+                    
+                    {/* Test button for teacher to check if socket events are working */}
+                    {this.state.userRole === "teacher" && (
+                      <IconButton
+                        title="Test socket events"
+                        style={{
+                          position: "absolute",
+                          top: "8px",
+                          left: "8px",
+                          zIndex: 3,
+                          background: "rgba(255,255,255,0.8)",
+                        }}
+                        onClick={() => {
+                          console.log('[DEBUG] Teacher test button clicked');
+                          console.log('[DEBUG] Current usernames:', this.state.usernames);
+                          console.log('[DEBUG] Current doubtNotifications:', this.state.doubtNotifications);
+                        }}
+                        size="small"
+                      >
+                        🔧
+                      </IconButton>
+                    )}
                   </div>
 
                 )}
@@ -1157,26 +1360,48 @@ stopTeacherAnalysisFor = (socketIdForPeer) => {
                           <span className="text">NO VIDEO</span>
                         </div>
                       )}
-                      {/* Confusion badge for teacher view */}
-                      {this.state.userRole === 'teacher' && (
-                        <div
-                          style={{
-                            position: 'absolute',
-                            top: '8px',
-                            left: '8px',
-                            zIndex: 3,
-                            background: badgeBg,
-                            color: 'white',
-                            padding: '4px 8px',
-                            borderRadius: '12px',
-                            fontSize: '10px',
-                            fontWeight: 'bold'
-                          }}
-                          title={confusion && confusion.mainEmotion ? `Emotion: ${confusion.mainEmotion}` : ''}
-                        >
-                          {confusion ? (confusion.label === 'Confused' ? 'Confused' : 'Not Confused') : 'Analyzing...'}
-                        </div>
-                      )}
+                                             {/* Confusion badge for teacher view */}
+                       {this.state.userRole === 'teacher' && (
+                         <div
+                           style={{
+                             position: 'absolute',
+                             top: '8px',
+                             left: '8px',
+                             zIndex: 3,
+                             background: badgeBg,
+                             color: 'white',
+                             padding: '4px 8px',
+                             borderRadius: '12px',
+                             fontSize: '10px',
+                             fontWeight: 'bold'
+                           }}
+                           title={confusion && confusion.mainEmotion ? `Emotion: ${confusion.mainEmotion}` : ''}
+                         >
+                           {confusion ? (confusion.label === 'Confused' ? 'Confused' : 'Not Confused') : 'Analyzing...'}
+                         </div>
+                       )}
+                       
+                       {/* Doubt notification indicator for teacher view */}
+                       {this.state.userRole === 'teacher' && this.state.doubtNotifications && this.state.doubtNotifications[id] && (
+                         <div
+                           style={{
+                             position: 'absolute',
+                             top: '8px',
+                             right: '8px',
+                             zIndex: 3,
+                             background: 'rgba(255, 193, 7, 0.9)',
+                             color: 'white',
+                             padding: '4px 8px',
+                             borderRadius: '12px',
+                             fontSize: '10px',
+                             fontWeight: 'bold',
+                             animation: 'pulse 2s infinite'
+                           }}
+                           title="Student has submitted a doubt"
+                         >
+                           ❓ Doubt
+                         </div>
+                       )}
                       <span className="name-label">{username}</span>
                       <IconButton className="pin-button" onClick={() => this.handlePin(id)} size="small">
                         <PushPinIcon color={pinnedId === id ? "primary" : "action"} />
