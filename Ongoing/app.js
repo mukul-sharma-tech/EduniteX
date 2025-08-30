@@ -178,7 +178,13 @@ socket.on('request-meeting-id', () => {
 
 
 
+// const PORT = process.env.PORT || 10000; // fallback only for local dev
+// server.listen(PORT, () => {
+//   console.log(`Server running on port ${PORT}`);
+// });
+
 const PORT = process.env.PORT || 10000; // fallback only for local dev
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
 });
+
