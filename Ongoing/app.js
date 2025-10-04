@@ -77,6 +77,19 @@ socket.on('request-meeting-id', () => {
     }
 });
 
+socket.on('student-doubt-submitted', (data) => {
+    // Broadcast doubt notification to everyone in the room
+    const room = Array.from(socket.rooms)[1];
+    console.log(`[SERVER] Student ${socket.id} submitted doubt in room ${room}:`, data);
+    console.log(`[SERVER] Socket rooms:`, Array.from(socket.rooms));
+    if (room) {
+        socket.broadcast.to(room).emit('doubt-notification', data);
+        console.log(`[SERVER] Doubt notification broadcast to room ${room}`);
+    } else {
+        console.log(`[SERVER] No room found for doubt notification`);
+    }
+});
+
 	socket.on('join-call', (path) => {
 		// Join the socket.io room
 		socket.join(path);

@@ -49,7 +49,7 @@ const QuizResult = () => {
       if (content.length > 300) {
         try {
           const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
-          const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+          const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
           const topicPrompt = `Summarize this content into a short topic name (max 5 words):\n\n"""${content}"""`;
           const result = await model.generateContent([topicPrompt]);
           const topicText = await result.response.text();
@@ -114,7 +114,7 @@ const QuizResult = () => {
     <motion.div
       initial={{ opacity: 0, y: 40 }}
       animate={{ opacity: 1, y: 0 }}
-      className="min-h-screen bg-gradient-to-b from-blue-100 to-white text-gray-900 p-6"
+      className="min-h-screenbg-gradient-to-br from-slate-800  to-slate-900-gray-900 p-6"
     >
       <div className="text-center mb-10">
         <h1 className="text-4xl font-bold mb-4 text-blue-700 flex items-center justify-center gap-2">

@@ -31,6 +31,7 @@ const RAW_RUNTIME_STATE =
           ["@babel/runtime", "npm:7.28.3"],\
           ["@emotion/react", "virtual:5630946fbc16c495619ecbcfe6a4f76ddf9beb4b5a26a4801e4e941e0c30972e4c21e9a86d3fa1ef6d9bc4a4dcc5668bbb303aea6422dacff67f3b8c00502001#npm:11.14.0"],\
           ["@emotion/styled", "virtual:5630946fbc16c495619ecbcfe6a4f76ddf9beb4b5a26a4801e4e941e0c30972e4c21e9a86d3fa1ef6d9bc4a4dcc5668bbb303aea6422dacff67f3b8c00502001#npm:11.14.1"],\
+          ["@google/generative-ai", "npm:0.24.1"],\
           ["@mui/icons-material", "virtual:5630946fbc16c495619ecbcfe6a4f76ddf9beb4b5a26a4801e4e941e0c30972e4c21e9a86d3fa1ef6d9bc4a4dcc5668bbb303aea6422dacff67f3b8c00502001#npm:7.3.1"],\
           ["@mui/material", "virtual:5630946fbc16c495619ecbcfe6a4f76ddf9beb4b5a26a4801e4e941e0c30972e4c21e9a86d3fa1ef6d9bc4a4dcc5668bbb303aea6422dacff67f3b8c00502001#npm:7.3.1"],\
           ["@supabase/supabase-js", "npm:2.56.0"],\
@@ -4181,6 +4182,15 @@ const RAW_RUNTIME_STATE =
         "packageLocation": "../../../../../../../C:/Users/MUKUL SHARMA/AppData/Local/Yarn/Berry/cache/@eslint-js-npm-8.57.1-dec269f278-10c0.zip/node_modules/@eslint/js/",\
         "packageDependencies": [\
           ["@eslint/js", "npm:8.57.1"]\
+        ],\
+        "linkType": "HARD"\
+      }]\
+    ]],\
+    ["@google/generative-ai", [\
+      ["npm:0.24.1", {\
+        "packageLocation": "../../../../../../../C:/Users/MUKUL SHARMA/AppData/Local/Yarn/Berry/cache/@google-generative-ai-npm-0.24.1-d9be3495d4-10c0.zip/node_modules/@google/generative-ai/",\
+        "packageDependencies": [\
+          ["@google/generative-ai", "npm:0.24.1"]\
         ],\
         "linkType": "HARD"\
       }]\
@@ -26039,6 +26049,7 @@ const RAW_RUNTIME_STATE =
           ["@babel/runtime", "npm:7.28.3"],\
           ["@emotion/react", "virtual:5630946fbc16c495619ecbcfe6a4f76ddf9beb4b5a26a4801e4e941e0c30972e4c21e9a86d3fa1ef6d9bc4a4dcc5668bbb303aea6422dacff67f3b8c00502001#npm:11.14.0"],\
           ["@emotion/styled", "virtual:5630946fbc16c495619ecbcfe6a4f76ddf9beb4b5a26a4801e4e941e0c30972e4c21e9a86d3fa1ef6d9bc4a4dcc5668bbb303aea6422dacff67f3b8c00502001#npm:11.14.1"],\
+          ["@google/generative-ai", "npm:0.24.1"],\
           ["@mui/icons-material", "virtual:5630946fbc16c495619ecbcfe6a4f76ddf9beb4b5a26a4801e4e941e0c30972e4c21e9a86d3fa1ef6d9bc4a4dcc5668bbb303aea6422dacff67f3b8c00502001#npm:7.3.1"],\
           ["@mui/material", "virtual:5630946fbc16c495619ecbcfe6a4f76ddf9beb4b5a26a4801e4e941e0c30972e4c21e9a86d3fa1ef6d9bc4a4dcc5668bbb303aea6422dacff67f3b8c00502001#npm:7.3.1"],\
           ["@supabase/supabase-js", "npm:2.56.0"],\

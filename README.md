@@ -82,7 +82,7 @@ __Make sure to use Python 3.10.* and install dependencies from [requirements.txt
 - OpenCV
 - SciKit-Image
 - google-generativeai
-  - gemini-1.5-flash (*for small AI tasks*)
+  - gemini-2.0-flash (*for small AI tasks*)
  
 
 ### 📡 Real-Time Communication

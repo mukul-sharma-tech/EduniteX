@@ -1,0 +1,647 @@
+/* Modern Dark Theme Video Call UI - Complete CSS */
+
+/* Global Styles */
+* {
+    box-sizing: border-box;
+  }
+  
+  html, body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    font-family: 'Segoe UI', 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%);
+    color: #ffffff;
+    overflow-x: hidden;
+  }
+  
+  /* Home Page Styles */
+  .container2 {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 20px;
+    text-align: center;
+  }
+  
+  h1 {
+    font-size: 3.5rem;
+    font-weight: 300;
+    margin-bottom: 1rem;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    text-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+  }
+  
+  p {
+    font-size: 1.1rem;
+    font-weight: 300;
+    color: #b8c5d6;
+    margin-bottom: 2rem;
+    max-width: 600px;
+    line-height: 1.6;
+  }
+  
+  /* Home Input Container */
+  .home-input-container {
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    padding: 40px;
+    min-width: 450px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+    transition: all 0.3s ease;
+  }
+  
+  .home-input-container:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.4);
+  }
+  
+  /* Username Prompt Container */
+  .username-prompt-container {
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    padding: 40px;
+    min-width: 500px;
+    width: 40%;
+    max-width: 600px;
+    margin: 50px auto 0;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+    text-align: center;
+    color: #ffffff;
+  }
+  
+  .username-prompt-label {
+    color: #ffffff !important;
+    font-size: 1.3rem !important;
+    font-weight: 600 !important;
+    margin: 20px 0 !important;
+    padding: 0 !important;
+  }
+  
+  /* Video Preview Container */
+  .video-preview-container {
+    display: flex;
+    justify-content: center;
+    margin-top: 30px;
+  }
+  
+  .video-preview {
+    width: 320px;
+    height: 180px;
+    border-radius: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    object-fit: cover;
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3);
+  }
+  
+  /* Main Video Container */
+  .container {
+    height: 100vh;
+    width: 100vw;
+    background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  
+  /* Video Grid */
+  #main.flex-container {
+    flex: 1;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 20px;
+    padding: 20px;
+    min-height: 0;
+  }
+  
+  /* Video Box Styles */
+  .video-box {
+    position: relative;
+    width: 320px;
+    height: 180px;
+    background: linear-gradient(135deg, #2d3748 0%, #1a202c 100%);
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    backdrop-filter: blur(10px);
+  }
+  
+  .video-box:hover {
+    transform: translateY(-8px) scale(1.02);
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.4);
+    border-color: rgba(102, 126, 234, 0.5);
+  }
+  
+  /* Pinned Video */
+  .video-box.pinned {
+    width: min(85vw, 1200px);
+    height: auto;
+    aspect-ratio: 16 / 9;
+    box-shadow: 0 30px 60px rgba(0, 0, 0, 0.5);
+    border: 3px solid rgba(102, 126, 234, 0.6);
+  }
+  
+  .video-box video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 14px;
+  }
+  
+  /* No Video Placeholder */
+  .no-video-placeholder {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #374151 0%, #1f2937 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #9ca3af;
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: 1px;
+  }
+  
+  .no-video-placeholder .icon {
+    font-size: 48px;
+    margin-bottom: 12px;
+    opacity: 0.7;
+  }
+  
+  .no-video-placeholder .text {
+    font-weight: 600;
+    letter-spacing: 2px;
+    font-size: 12px;
+  }
+  
+  /* Name Label */
+  .name-label {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.8) 100%);
+    color: #ffffff;
+    padding: 12px 16px 8px;
+    font-size: 14px;
+    font-weight: 600;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+    border-bottom-left-radius: 14px;
+    border-bottom-right-radius: 14px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    z-index: 2;
+  }
+  
+  /* Pin Button */
+  .pin-button.MuiIconButton-root {
+    position: absolute !important;
+    top: 12px !important;
+    right: 12px !important;
+    z-index: 10 !important;
+    background: rgba(0, 0, 0, 0.6) !important;
+    backdrop-filter: blur(10px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    color: #ffffff !important;
+    width: 36px !important;
+    height: 36px !important;
+    transition: all 0.3s ease !important;
+  }
+  
+  .pin-button.MuiIconButton-root:hover {
+    background: rgba(102, 126, 234, 0.8) !important;
+    transform: scale(1.1) !important;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4) !important;
+  }
+  
+  /* Bottom Control Bar */
+  .btn-down {
+    background: rgba(15, 15, 35, 0.95);
+    backdrop-filter: blur(20px);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    padding: 20px;
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.3);
+  }
+  
+  .btn-down .MuiIconButton-root {
+    background: rgba(255, 255, 255, 0.1) !important;
+    backdrop-filter: blur(10px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    color: #ffffff !important;
+    width: 56px !important;
+    height: 56px !important;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    margin: 0 8px !important;
+  }
+  
+  .btn-down .MuiIconButton-root:hover {
+    background: rgba(255, 255, 255, 0.2) !important;
+    transform: translateY(-4px) scale(1.05) !important;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3) !important;
+  }
+  
+  /* End Call Button (Red) */
+  .btn-down .MuiIconButton-root[style*="color: rgb(244, 67, 54)"],
+  .btn-down .MuiIconButton-root[style*="color:#f44336"] {
+    background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%) !important;
+    border-color: rgba(244, 67, 54, 0.5) !important;
+  }
+  
+  .btn-down .MuiIconButton-root[style*="color: rgb(244, 67, 54)"]:hover,
+  .btn-down .MuiIconButton-root[style*="color:#f44336"]:hover {
+    background: linear-gradient(135deg, #e53935 0%, #c62828 100%) !important;
+    box-shadow: 0 8px 25px rgba(244, 67, 54, 0.4) !important;
+  }
+  
+  /* Badge Styles */
+  .MuiBadge-root .MuiBadge-badge {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+    color: #ffffff !important;
+    font-weight: 600 !important;
+    border: 2px solid rgba(255, 255, 255, 0.2) !important;
+  }
+  
+  /* Status Indicators */
+  div[style*="background: rgba(76, 175, 80"] {
+    background: linear-gradient(135deg, #4caf50 0%, #388e3c 100%) !important;
+    border: 1px solid rgba(76, 175, 80, 0.3) !important;
+    backdrop-filter: blur(10px) !important;
+  }
+  
+  div[style*="background: rgba(244, 67, 54"] {
+    background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%) !important;
+    border: 1px solid rgba(244, 67, 54, 0.3) !important;
+    backdrop-filter: blur(10px) !important;
+  }
+  
+  div[style*="background: rgba(255, 193, 7"] {
+    background: linear-gradient(135deg, #ffc107 0%, #f57c00 100%) !important;
+    color: #1a1a1a !important;
+    border: 1px solid rgba(255, 193, 7, 0.3) !important;
+    backdrop-filter: blur(10px) !important;
+    font-weight: 700 !important;
+  }
+  
+  /* Confusion/Analysis Badges */
+  div[style*="background: rgba(0,0,0,0.4)"] {
+    background: rgba(255, 255, 255, 0.1) !important;
+    backdrop-filter: blur(10px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  }
+  
+  /* Chat Modal */
+  .chat-modal .modal-content {
+    background: rgba(15, 15, 35, 0.95) !important;
+    backdrop-filter: blur(20px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-radius: 20px !important;
+    color: #ffffff !important;
+  }
+  
+  .chat-modal .modal-header {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+    background: transparent !important;
+  }
+  
+  .chat-modal .modal-title {
+    color: #ffffff !important;
+    font-weight: 600 !important;
+  }
+  
+  .chat-modal .modal-body {
+    background: transparent !important;
+    max-height: 400px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
+  }
+  
+  .chat-modal .modal-body::-webkit-scrollbar {
+    width: 6px;
+  }
+  
+  .chat-modal .modal-body::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  .chat-modal .modal-body::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 3px;
+  }
+  
+  .chat-modal .modal-body p {
+    color: #e2e8f0 !important;
+    margin-bottom: 12px;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    word-break: break-word;
+  }
+  
+  .chat-modal .modal-body b {
+    color: #667eea !important;
+    font-weight: 600;
+  }
+  
+  .chat-modal .modal-footer {
+    border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
+    background: transparent !important;
+  }
+  
+  .div-send-msg {
+    display: flex;
+    gap: 12px;
+    width: 100%;
+  }
+  
+  .div-send-msg .MuiInput-root {
+    flex: 1;
+    color: #ffffff !important;
+  }
+  
+  .div-send-msg .MuiInput-root::before {
+    border-bottom-color: rgba(255, 255, 255, 0.3) !important;
+  }
+  
+  .div-send-msg .MuiInput-root:hover::before {
+    border-bottom-color: rgba(255, 255, 255, 0.5) !important;
+  }
+  
+  .div-send-msg .MuiInput-root::after {
+    border-bottom-color: #667eea !important;
+  }
+  
+  /* Modal Overlays */
+  .modal-content {
+    background: rgba(15, 15, 35, 0.95) !important;
+    backdrop-filter: blur(20px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-radius: 20px !important;
+    color: #ffffff !important;
+  }
+  
+  .modal-header {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+    background: transparent !important;
+  }
+  
+  .modal-title {
+    color: #ffffff !important;
+    font-weight: 600 !important;
+  }
+  
+  .modal-body {
+    background: transparent !important;
+    color: #e2e8f0 !important;
+  }
+  
+  .modal-footer {
+    border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
+    background: transparent !important;
+  }
+  
+  /* Form Controls */
+  .MuiTextField-root {
+    margin: 16px 0 !important;
+  }
+  
+  .MuiTextField-root .MuiInputLabel-root {
+    color: rgba(255, 255, 255, 0.7) !important;
+  }
+  
+  .MuiTextField-root .MuiInputLabel-root.Mui-focused {
+    color: #667eea !important;
+  }
+  
+  .MuiTextField-root .MuiOutlinedInput-root {
+    color: #ffffff !important;
+  }
+  
+  .MuiTextField-root .MuiOutlinedInput-notchedOutline {
+    border-color: rgba(255, 255, 255, 0.3) !important;
+  }
+  
+  .MuiTextField-root .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline {
+    border-color: rgba(255, 255, 255, 0.5) !important;
+  }
+  
+  .MuiTextField-root .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline {
+    border-color: #667eea !important;
+  }
+  
+  /* Buttons */
+  .MuiButton-root {
+    border-radius: 12px !important;
+    padding: 12px 24px !important;
+    font-weight: 600 !important;
+    text-transform: none !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  }
+  
+  .MuiButton-contained {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+    color: #ffffff !important;
+    border: none !important;
+  }
+  
+  .MuiButton-contained:hover {
+    background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%) !important;
+    transform: translateY(-2px) !important;
+    box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4) !important;
+  }
+  
+  .MuiButton-text {
+    color: #667eea !important;
+    background: rgba(102, 126, 234, 0.1) !important;
+  }
+  
+  .MuiButton-text:hover {
+    background: rgba(102, 126, 234, 0.2) !important;
+    transform: translateY(-1px) !important;
+  }
+  
+  /* Toggle Button Group */
+  .MuiToggleButtonGroup-root {
+    border-radius: 12px !important;
+    overflow: hidden !important;
+    background: rgba(255, 255, 255, 0.05) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  }
+  
+  .MuiToggleButton-root {
+    color: rgba(255, 255, 255, 0.7) !important;
+    border: none !important;
+    background: transparent !important;
+    padding: 12px 24px !important;
+    font-weight: 600 !important;
+    transition: all 0.3s ease !important;
+  }
+  
+  .MuiToggleButton-root:hover {
+    background: rgba(255, 255, 255, 0.1) !important;
+    color: #ffffff !important;
+  }
+  
+  .MuiToggleButton-root.Mui-selected {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+    color: #ffffff !important;
+  }
+  
+  /* Autocomplete */
+  .MuiAutocomplete-root .MuiTextField-root {
+    background: rgba(255, 255, 255, 0.05) !important;
+    border-radius: 12px !important;
+  }
+  
+  .MuiAutocomplete-paper {
+    background: rgba(15, 15, 35, 0.95) !important;
+    backdrop-filter: blur(20px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-radius: 12px !important;
+    color: #ffffff !important;
+  }
+  
+  .MuiAutocomplete-option {
+    color: #ffffff !important;
+  }
+  
+  .MuiAutocomplete-option:hover {
+    background: rgba(102, 126, 234, 0.2) !important;
+  }
+  
+  .MuiAutocomplete-option[aria-selected="true"] {
+    background: rgba(102, 126, 234, 0.3) !important;
+  }
+  
+  /* Home Button */
+  button[style*="position: fixed"] {
+    background: rgba(15, 15, 35, 0.9) !important;
+    backdrop-filter: blur(20px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    color: #667eea !important;
+    border-radius: 12px !important;
+    padding: 8px 16px !important;
+    font-weight: 600 !important;
+    transition: all 0.3s ease !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+  }
+  
+  button[style*="position: fixed"]:hover {
+    background: rgba(102, 126, 234, 0.1) !important;
+    transform: translateY(-2px) !important;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4) !important;
+  }
+  
+  /* Pulse Animation for Notifications */
+  @keyframes pulse {
+    0% {
+      transform: scale(1);
+      opacity: 1;
+    }
+    50% {
+      transform: scale(1.05);
+      opacity: 0.8;
+    }
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+  
+  /* Responsive Design */
+  @media (max-width: 768px) {
+    .username-prompt-container {
+      width: 90%;
+      min-width: 0;
+      padding: 30px 20px;
+    }
+    
+    .video-box {
+      width: calc(50vw - 30px);
+      height: calc((50vw - 30px) * 0.5625);
+    }
+    
+    .video-box.pinned {
+      width: 95vw;
+    }
+    
+    h1 {
+      font-size: 2.5rem;
+    }
+    
+    .btn-down {
+      padding: 15px;
+      gap: 15px;
+    }
+    
+    .btn-down .MuiIconButton-root {
+      width: 48px !important;
+      height: 48px !important;
+    }
+  }
+  
+  @media (max-width: 480px) {
+    .video-box {
+      width: calc(100vw - 40px);
+      height: calc((100vw - 40px) * 0.5625);
+    }
+    
+    .username-prompt-container {
+      padding: 20px 15px;
+    }
+    
+    h1 {
+      font-size: 2rem;
+    }
+  }
+  
+  /* Scrollbar Styles */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+  }
+  
+  /* Loading States */
+  .MuiCircularProgress-root {
+    color: #667eea !important;
+  }
+  
+  

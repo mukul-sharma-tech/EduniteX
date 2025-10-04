@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Sparkles } from 'lucide-react';
 
 const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
 const ChooseSubject = () => {
   const [subject, setSubject] = useState('');
@@ -92,7 +92,7 @@ Only list the questions. No explanations.`;
   };
 
   return (
-    <div className="bg-gradient-to-br from-blue-100 via-white to-blue-200 text-black min-h-screen transition-colors duration-300">
+    <div className="bg-gradient-to-br from-slate-800  to-slate-900 text-black min-h-screen transition-colors duration-300">
       <div className="max-w-4xl mx-auto px-4 py-10 flex flex-col items-center">
         <div className="flex justify-between items-center w-full mb-6">
           <h1 className="text-3xl font-bold flex items-center gap-2 text-blue-700">
@@ -106,12 +106,12 @@ Only list the questions. No explanations.`;
             >
               🏠 Home
             </button>
-            <button
+            {/* <button
               onClick={() => setDarkMode(!darkMode)}
               className="text-xl hover:scale-110 transition-transform"
             >
               {darkMode ? <Sun className="text-yellow-400" /> : <Moon className="text-blue-600" />}
-            </button>
+            </button> */}
           </div>
         </div>
 

@@ -7,10 +7,23 @@ const dotenv = require('dotenv');
 dotenv.config();
 
 const app = express();
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({ 
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 50 * 1024 * 1024 // 50MB limit
+  }
+});
 
-app.use(cors());
-app.use(express.json());
+// Configure CORS to allow requests from the frontend
+app.use(cors({
+  origin: ['http://localhost:8000', 'http://localhost:3000', 'http://localhost:3001'],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 app.post('/extract-pdf', upload.single('pdf'), async (req, res) => {
   try {
@@ -45,7 +58,7 @@ app.post('/extract-text-pdf', upload.single('pdf'), async (req, res) => {
 
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
 app.post("/chat", async (req, res) => {
   const { message, context = [] } = req.body;
@@ -83,6 +96,35 @@ app.post("/chat", async (req, res) => {
   }
 });
 
+app.post("/solve-doubt", async (req, res) => {
+  console.log('[DEBUG] Solve-doubt endpoint called with:', req.body);
+  const { doubt, studentName, subject } = req.body;
 
-const PORT = 5000;
+  if (!doubt) {
+    console.log('[DEBUG] No doubt text provided');
+    return res.status(400).json({ error: "Doubt text is required" });
+  }
+
+  try {
+    const prompt = `You are a teacher helping ${studentName} with a doubt in ${subject || 'general studies'}.
+
+Doubt: "${doubt}"
+
+Give a short, clear solution (3-5 sentences). 
+Use simple language, examples if needed, and be encouraging.`;
+
+    console.log('[DEBUG] Sending prompt to Gemini:', prompt);
+    const result = await model.generateContent(prompt);
+    const solution = result.response.text();
+    console.log('[DEBUG] Gemini response received, length:', solution.length);
+
+    res.json({ solution });
+  } catch (error) {
+    console.error("Error solving doubt with Gemini:", error);
+    res.status(500).json({ error: "Failed to generate solution" });
+  }
+});
+
+
+const PORT = 5001;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
