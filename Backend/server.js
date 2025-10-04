@@ -58,7 +58,7 @@ app.post('/extract-text-pdf', upload.single('pdf'), async (req, res) => {
 
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
 app.post("/chat", async (req, res) => {
   const { message, context = [] } = req.body;

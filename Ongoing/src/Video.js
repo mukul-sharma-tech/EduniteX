@@ -1020,7 +1020,7 @@ stopTeacherAnalysisFor = (socketIdForPeer) => {
     try {
              const response = await fetch('http://localhost:5001/solve-doubt', {
         method: 'POST',
-        headers: {
+        headers: { 
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
