@@ -16,8 +16,8 @@ const upload = multer({
 
 // Configure CORS to allow requests from the frontend
 app.use(cors({
-  origin: ['http://localhost:8000', 'http://localhost:3000', 'http://localhost:3001'],
-  credentials: true,
+  origin: '*', // allow all origins
+  credentials: true, // note: credentials cannot be used with '*' in some browsers
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
