@@ -121,7 +121,7 @@ const YouTubeAnalyzer = () => {
       setLoadingStep('AI is analyzing the content...');
       
       const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
       const prompt = `
 Analyze the following YouTube video transcript and provide a comprehensive analysis in JSON format:
