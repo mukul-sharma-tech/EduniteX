@@ -5,9 +5,6 @@ import { Moon, Sun, ChevronRight, Upload, BookText } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Sparkles } from 'lucide-react';
 
-const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
-
 const ChooseSubject = () => {
   const [subject, setSubject] = useState('');
   const [customSubject, setCustomSubject] = useState('');
@@ -21,37 +18,85 @@ const ChooseSubject = () => {
   const subjects = ['Math', 'Physics', 'Biology', 'English', 'Chemistry', 'Other'];
   const levels = ['Beginner', 'Intermediate', 'Advanced'];
 
-  const generateQuestions = async () => {
-    const chosenSubject = subject === 'Other' ? customSubject : subject;
-    if (!chosenSubject || !difficulty) return;
+// ✅ Clean Text Helper
+const cleanText = (text) => {
+  return text
+    .replace(/[^\w\s?.]/g, '')   // remove special symbols
+    .replace(/\s+/g, ' ')       // fix spacing
+    .trim();
+};
 
-    setLoading(true);
-    try {
-      const prompt = `
+
+// ✅ Call Ollama
+const callOllama = async (prompt) => {
+  const res = await fetch('http://localhost:11434/api/generate', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'gpt-oss:120b-cloud',
+      prompt,
+      stream: false,
+    }),
+  });
+
+  if (!res.ok) {
+    throw new Error('Ollama API failed');
+  }
+
+  const data = await res.json();
+  return data.response;
+};
+
+
+const generateQuestions = async () => {
+
+  const chosenSubject = subject === 'Other' ? customSubject : subject;
+
+  if (!chosenSubject || !difficulty) return;
+
+  setLoading(true);
+
+  try {
+
+    const prompt = `
 You are an oral test examiner.
-Generate 5 short and clear oral test questions for a ${difficulty} level ${chosenSubject} subject.
-- Keep questions concise, speakable, and relevant.
-- Avoid technical jargon or lengthy paragraphs.
-- Make them suitable for a spoken test, not written exams.
-Only list the questions. No explanations.`;
 
-      const result = await model.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text();
+Generate exactly 5 short spoken questions for a ${difficulty} level student in ${chosenSubject}.
 
-      const questions = text
-        .split('\n')
-        .map(q => q.replace(/^[-•\d.]*\s*/, '').trim())
-        .filter(Boolean)
-        .slice(0, 5);
+Rules:
+- Each question must be one sentence.
+- Keep it short and simple.
+- No numbering.
+- No bullets.
+- No special symbols.
+- No explanations.
+- Plain text only.
+- Each question on a new line.
+`;
 
-      setQuestionList(questions);
-    } catch (error) {
-      console.error('Error generating questions:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+    const aiOutput = await callOllama(prompt);
+
+    // Split + Clean
+    const questions = aiOutput
+      .split('\n')
+      .map(q => cleanText(q))
+      .filter(q => q.length > 5)
+      .slice(0, 5);
+
+    setQuestionList(questions);
+
+  } catch (error) {
+
+    console.error('Error generating questions:', error);
+
+  } finally {
+
+    setLoading(false);
+
+  }
+};
 
   const handleUploadPdf = async (e) => {
     const file = e.target.files[0];

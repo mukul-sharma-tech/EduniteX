@@ -36,7 +36,7 @@ Format your response with clear headings and bullet points.
 `;
 
   const traitPromptFromEvaluation = (evaluation) => `
-From the following evaluation text, extract two arrays: one for strengths and one for weaknesses.
+From the following evaluation text, extract two arrays: one for strengths and one for weaknesses. each element of array should contain only topic name of strength or weaknesses, no big sentences.
 Return a JSON object like:
 {
   "strengths": ["Point 1", "Point 2", ...],
@@ -113,45 +113,95 @@ ${evaluation}
 
   useEffect(() => {
     if (!extractedText) return;
-
     const evaluate = async () => {
       setIsLoading(true);
-      try {
-        const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
-        // Step 1: Full Evaluation
-        const result = await model.generateContent([prompt]);
-        const fullEvaluation = await result.response.text();
+      try {
+        /* -----------------------------
+           Step 1: Full Evaluation
+        ----------------------------- */
+
+        const evalRes = await fetch('http://localhost:11434/api/generate', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'gpt-oss:120b-cloud',
+            prompt: prompt,
+            stream: false,
+          }),
+        });
+
+        const evalData = await evalRes.json();
+
+        const fullEvaluation = evalData.response?.trim();
+
+        if (!fullEvaluation) {
+          throw new Error('No evaluation received');
+        }
+
         setEvaluation(fullEvaluation);
 
-        // Step 2: Extract strengths & weaknesses from evaluation via Gemini
+        /* -----------------------------
+           Step 2: Extract Traits
+        ----------------------------- */
+
         const traitsPrompt = traitPromptFromEvaluation(fullEvaluation);
-        const traitResult = await model.generateContent([traitsPrompt]);
-        const traitText = await traitResult.response.text();
+
+        const traitRes = await fetch('http://localhost:11434/api/generate', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'gpt-oss:120b-cloud',
+            prompt: traitsPrompt,
+            stream: false,
+          }),
+        });
+
+        const traitData = await traitRes.json();
+
+        const traitText = traitData.response?.trim();
+
+        if (!traitText) {
+          throw new Error('No trait data received');
+        }
 
         let traits;
+
         try {
-          traits = JSON.parse(traitText);
+          // Try extracting JSON safely
+          const jsonText = traitText.match(/\{.*\}/s)?.[0];
+          traits = JSON.parse(jsonText);
+
         } catch (err) {
-          console.error("❌ JSON parse error for traits:", err, traitText);
-          setSaveStatus("error");
-          setSaveMessage("❌ AI returned invalid trait data.");
+          console.error('❌ JSON parse error for traits:', err, traitText);
+
+          setSaveStatus('error');
+          setSaveMessage('❌ AI returned invalid trait data.');
           return;
         }
 
         const { strengths = [], weaknesses = [] } = traits;
+
+        /* -----------------------------
+           Step 3: Save to Supabase
+        ----------------------------- */
+
         if ((strengths.length || weaknesses.length) && email) {
           await saveToSupabase(strengths, weaknesses);
         }
+
       } catch (err) {
-        console.error("Gemini Error:", err);
+        console.error('Ollama Error:', err);
         setEvaluation('❌ Failed to evaluate answers.');
+
       } finally {
         setIsLoading(false);
       }
     };
-
     evaluate();
   }, [extractedText]);
 
@@ -207,11 +257,10 @@ ${evaluation}
 
           {saveMessage && (
             <div
-              className={`max-w-xl mx-auto mb-6 px-4 py-3 rounded-lg text-center font-medium ${
-                saveStatus === "success"
+              className={`max-w-xl mx-auto mb-6 px-4 py-3 rounded-lg text-center font-medium ${saveStatus === "success"
                   ? "bg-green-100 text-green-700 border border-green-300"
                   : "bg-red-100 text-red-700 border border-red-300"
-              }`}
+                }`}
             >
               {saveMessage}
             </div>

@@ -12,29 +12,37 @@ const QuizUpload = () => {
 
   const handleSubmit = async () => {
     setLoading(true);
+
     try {
       let content = '';
 
       if (pdfFile) {
         const formData = new FormData();
         formData.append('pdf', pdfFile);
-        const res = await axios.post('https://eduassist-nak8.onrender.com/extract-text-pdf', formData);
+
+        const res = await axios.post(
+          'https://eduassist-nak8.onrender.com/extract-text-pdf',
+          formData
+        );
+
         content = res.data.text?.trim();
       } else if (manualText.trim()) {
         content = manualText.trim();
       }
 
       if (!content) {
-        alert("❌ Please upload a PDF or enter some text.");
+        alert('❌ Please upload a PDF or enter some text.');
         setLoading(false);
         return;
       }
 
-localStorage.setItem("eduassist_quiz_content", content);
+      localStorage.setItem('eduassist_quiz_content', content);
+
       navigate('/quiz', { state: { content } });
+
     } catch (err) {
       console.error(err);
-      alert("❌ Failed to process input");
+      alert('❌ Failed to process input');
     } finally {
       setLoading(false);
     }
@@ -44,17 +52,18 @@ localStorage.setItem("eduassist_quiz_content", content);
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="min-h-screen bg-gradient-to-br from-slate-800  to-slate-900 p-8 flex flex-col items-center justify-center"
+      className="min-h-screen bg-gradient-to-br from-slate-800 to-slate-900 p-8 flex flex-col items-center justify-center"
     >
       <h1 className="text-4xl font-bold mb-6 text-blue-800 flex items-center gap-2">
-        <FileUp size={32} /> <span className="text-blue-400">Quiz Generator</span>
+        <FileUp size={32} />
+        <span className="text-blue-400">Quiz Generator</span>
       </h1>
 
       <input
         type="file"
         accept="application/pdf"
         onChange={(e) => setPdfFile(e.target.files[0])}
-        className="mb-4 text-white  file:bg-blue-200 file:hover:bg-blue-300 file:text-blue-800 file:rounded-full text-sm"
+        className="mb-4 text-white file:bg-blue-200 file:hover:bg-blue-300 file:text-blue-800 file:rounded-full text-sm"
       />
 
       <textarea
@@ -67,8 +76,8 @@ localStorage.setItem("eduassist_quiz_content", content);
 
       <button
         onClick={handleSubmit}
-        className="flex items-center gap-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold px-6 py-2 rounded-xl"
         disabled={loading}
+        className="flex items-center gap-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold px-6 py-2 rounded-xl"
       >
         {loading ? <LoaderCircle className="animate-spin" /> : <UploadCloud />}
         {loading ? 'Generating Quiz...' : 'Generate Quiz'}

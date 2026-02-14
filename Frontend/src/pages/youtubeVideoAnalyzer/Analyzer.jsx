@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { 
-  Youtube, 
-  Brain, 
-  FileText, 
-  Download, 
-  LoaderCircle, 
-  AlertCircle, 
+import {
+  Youtube,
+  Brain,
+  FileText,
+  Download,
+  LoaderCircle,
+  AlertCircle,
   CheckCircle,
   Play,
   Clock,
@@ -16,8 +16,6 @@ import {
   List,
   Target
 } from 'lucide-react';
-
-const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || 'your-gemini-api-key';
 
 const YouTubeAnalyzer = () => {
   const [videoUrl, setVideoUrl] = useState('');
@@ -43,16 +41,16 @@ const YouTubeAnalyzer = () => {
   const fetchVideoMetadata = async (videoId) => {
     try {
       setLoadingStep('Fetching video information...');
-      
+
       // Using YouTube oEmbed API (no API key required)
       const oembedResponse = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`);
-      
+
       if (!oembedResponse.ok) {
         throw new Error('Video not found or private');
       }
-      
+
       const oembedData = await oembedResponse.json();
-      
+
       return {
         title: oembedData.title,
         channel: oembedData.author_name,
@@ -74,21 +72,21 @@ const YouTubeAnalyzer = () => {
   const fetchTranscript = async (videoId) => {
     try {
       setLoadingStep('Fetching video transcript...');
-      
+
       // Using a CORS proxy to fetch transcript data
       const proxyUrl = 'https://api.allorigins.win/get?url=';
       const transcriptUrl = `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en&fmt=json3`;
-      
+
       const response = await fetch(proxyUrl + encodeURIComponent(transcriptUrl));
       const data = await response.json();
-      
+
       if (data.contents) {
         const transcriptData = JSON.parse(data.contents);
-        
+
         if (transcriptData.events) {
           const transcript = transcriptData.events
             .filter(event => event.segs)
-            .map(event => 
+            .map(event =>
               event.segs
                 .map(seg => seg.utf8)
                 .join('')
@@ -97,15 +95,15 @@ const YouTubeAnalyzer = () => {
             .replace(/\n/g, ' ')
             .replace(/\s+/g, ' ')
             .trim();
-            
+
           return transcript;
         }
       }
-      
+
       throw new Error('No transcript available');
     } catch (error) {
       console.error('Error fetching transcript:', error);
-      
+
       // Fallback: generate a sample transcript for demonstration
       return `This video discusses important concepts and provides valuable insights on the topic. 
       The content covers various aspects including theoretical foundations, practical applications, 
@@ -116,118 +114,152 @@ const YouTubeAnalyzer = () => {
   };
 
   // Function to analyze video using Gemini AI
-  const analyzeWithAI = async (transcript, videoInfo) => {
-    try {
-      setLoadingStep('AI is analyzing the content...');
-      
-      const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+const analyzeWithAI = async (transcript, videoInfo) => {
+  try {
+    setLoadingStep('AI is analyzing the content...');
 
-      const prompt = `
-Analyze the following YouTube video transcript and provide a comprehensive analysis in JSON format:
+    const prompt = `
+Analyze the following YouTube video transcript and provide a comprehensive analysis in JSON format.
 
 Video Title: ${videoInfo.title}
 Channel: ${videoInfo.channel}
 Transcript: ${transcript}
 
-Please provide the analysis in this exact JSON structure:
+Return ONLY valid JSON in the following format.
+No explanation. No markdown.
+
 {
-  "summary": "A comprehensive 2-3 sentence summary of the video content",
+  "summary": "2-3 sentence summary",
   "keyInsights": [
-    "First key insight from the video",
-    "Second key insight from the video",
-    "Third key insight from the video",
-    "Fourth key insight from the video",
-    "Fifth key insight from the video"
+    "Insight 1",
+    "Insight 2",
+    "Insight 3",
+    "Insight 4",
+    "Insight 5"
   ],
   "detailedNotes": {
-    "introduction": "Brief overview of what the video introduces",
+    "introduction": "Intro overview",
     "mainConcepts": [
       {
-        "topic": "First main concept/topic",
-        "content": "Detailed explanation of this concept"
+        "topic": "Concept 1",
+        "content": "Explanation"
       },
       {
-        "topic": "Second main concept/topic", 
-        "content": "Detailed explanation of this concept"
+        "topic": "Concept 2",
+        "content": "Explanation"
       },
       {
-        "topic": "Third main concept/topic",
-        "content": "Detailed explanation of this concept"
+        "topic": "Concept 3",
+        "content": "Explanation"
       }
     ],
     "practicalApplications": [
-      "First practical application or use case",
-      "Second practical application or use case",
-      "Third practical application or use case",
-      "Fourth practical application or use case"
+      "Application 1",
+      "Application 2",
+      "Application 3",
+      "Application 4"
     ],
-    "conclusion": "Summary of the video's conclusion and final thoughts"
+    "conclusion": "Final thoughts"
   },
   "actionItems": [
-    "First actionable step viewers can take",
-    "Second actionable step viewers can take", 
-    "Third actionable step viewers can take",
-    "Fourth actionable step viewers can take"
+    "Action 1",
+    "Action 2",
+    "Action 3",
+    "Action 4"
   ],
   "studyTopics": [
-    "Related topic 1 for further study",
-    "Related topic 2 for further study",
-    "Related topic 3 for further study",
-    "Related topic 4 for further study"
+    "Topic 1",
+    "Topic 2",
+    "Topic 3",
+    "Topic 4"
   ]
 }
+`;
 
-Make sure the response is valid JSON only, with no additional text or formatting.`;
+    /* -----------------------------
+       Call Ollama
+    ----------------------------- */
 
-      const result = await model.generateContent([prompt]);
-      const responseText = await result.response.text();
-      
-      // Extract JSON from responsea
-      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        throw new Error('Invalid AI response format');
-      }
-      
-      const analysisData = JSON.parse(jsonMatch[0]);
-      
-      // Generate timestamps (mock data since we don't have timing info)
-      const generateTimestamps = () => {
-        const topics = analysisData.detailedNotes.mainConcepts.map(concept => concept.topic);
-        return topics.map((topic, index) => ({
-          time: `${Math.floor(index * 3.5)}:${String((index * 3.5 % 1) * 60).padStart(2, '0').slice(0, 2)}`,
-          topic: topic
-        }));
-      };
+    const res = await fetch('http://localhost:11434/api/generate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-oss:120b-cloud',
+        prompt,
+        stream: false,
+      }),
+    });
 
-      return {
-        ...analysisData,
-        timestamps: generateTimestamps()
-      };
+    const data = await res.json();
 
-    } catch (error) {
-      console.error('AI Analysis Error:', error);
-      throw new Error('Failed to analyze video content with AI');
+    const responseText = data.response?.trim();
+
+    if (!responseText) {
+      throw new Error('Empty AI response');
     }
-  };
+
+    /* -----------------------------
+       Parse JSON Safely
+    ----------------------------- */
+
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+
+    if (!jsonMatch) {
+      throw new Error('Invalid AI response format');
+    }
+
+    const analysisData = JSON.parse(jsonMatch[0]);
+
+    /* -----------------------------
+       Generate Mock Timestamps
+    ----------------------------- */
+
+    const generateTimestamps = () => {
+      const topics =
+        analysisData.detailedNotes?.mainConcepts?.map(
+          (concept) => concept.topic
+        ) || [];
+
+      return topics.map((topic, index) => ({
+        time: `${Math.floor(index * 3.5)}:${String(
+          ((index * 3.5) % 1) * 60
+        )
+          .padStart(2, '0')
+          .slice(0, 2)}`,
+        topic,
+      }));
+    };
+
+    return {
+      ...analysisData,
+      timestamps: generateTimestamps(),
+    };
+
+  } catch (error) {
+    console.error('AI Analysis Error:', error);
+    throw new Error('Failed to analyze video content with AI');
+  }
+};
 
   // Main analyze function
   const analyzeVideo = async (videoId) => {
     try {
       // Step 1: Get video metadata
       const videoInfo = await fetchVideoMetadata(videoId);
-      
+
       // Step 2: Get transcript
       const transcript = await fetchTranscript(videoId);
-      
+
       // Step 3: Analyze with AI
       const analysisData = await analyzeWithAI(transcript, videoInfo);
-      
+
       return {
         videoInfo,
         ...analysisData
       };
-      
+
     } catch (error) {
       console.error('Analysis error:', error);
       throw error;
@@ -283,9 +315,9 @@ ${analysis.keyInsights.map(insight => `• ${insight}`).join('\n')}
 ${analysis.detailedNotes.introduction}
 
 ### Main Concepts
-${analysis.detailedNotes.mainConcepts.map(concept => 
-  `**${concept.topic}**\n${concept.content}\n`
-).join('\n')}
+${analysis.detailedNotes.mainConcepts.map(concept =>
+      `**${concept.topic}**\n${concept.content}\n`
+    ).join('\n')}
 
 ### Practical Applications
 ${analysis.detailedNotes.practicalApplications.map(app => `• ${app}`).join('\n')}
@@ -320,11 +352,10 @@ Generated by AI Video Analyzer
   const TabButton = ({ id, label, icon: Icon, active, onClick }) => (
     <button
       onClick={() => onClick(id)}
-      className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
-        active 
-          ? 'bg-blue-600 text-white shadow-lg' 
+      className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${active
+          ? 'bg-blue-600 text-white shadow-lg'
           : 'text-gray-300 hover:text-white hover:bg-gray-700'
-      }`}
+        }`}
     >
       <Icon size={18} />
       {label}
@@ -383,13 +414,13 @@ Generated by AI Video Analyzer
                   )}
                 </button>
                 <TabButton
-                id="timestamps"
-                label="Timestamps"
-                icon={Clock}
-                active={activeTab === 'timestamps'}
-                onClick={setActiveTab}
-              />
-            </div>
+                  id="timestamps"
+                  label="Timestamps"
+                  icon={Clock}
+                  active={activeTab === 'timestamps'}
+                  onClick={setActiveTab}
+                />
+              </div>
             </div>
 
             {error && (
@@ -540,7 +571,7 @@ Generated by AI Video Analyzer
                       <h4 className="text-lg font-semibold text-blue-400 mb-2">Introduction</h4>
                       <p className="text-gray-300 leading-relaxed">{analysis.detailedNotes.introduction}</p>
                     </div>
-                    
+
                     <div>
                       <h4 className="text-lg font-semibold text-blue-400 mb-3">Main Concepts</h4>
                       <div className="space-y-4">
@@ -627,7 +658,7 @@ Generated by AI Video Analyzer
                   <div className="space-y-2">
                     {analysis.timestamps?.map((timestamp, index) => (
                       <div key={index} className="flex items-center gap-4 p-3 bg-slate-600/50 rounded-lg hover:bg-slate-600/70 transition-colors cursor-pointer"
-                           onClick={() => window.open(`https://www.youtube.com/watch?v=${extractVideoId(videoUrl)}&t=${timestamp.time.replace(':', 'm')}s`, '_blank')}>
+                        onClick={() => window.open(`https://www.youtube.com/watch?v=${extractVideoId(videoUrl)}&t=${timestamp.time.replace(':', 'm')}s`, '_blank')}>
                         <span className="font-mono text-purple-400 font-semibold min-w-[60px]">{timestamp.time}</span>
                         <span className="text-gray-300">{timestamp.topic}</span>
                         <Play size={16} className="text-purple-400 ml-auto opacity-60" />

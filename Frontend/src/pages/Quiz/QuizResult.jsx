@@ -3,108 +3,122 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Trophy, RotateCcw } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const QuizResult = () => {
   const { state } = useLocation();
   const navigate = useNavigate();
 
-  const contentFromStorage = localStorage.getItem("eduassist_quiz_content") || '';
-  const { questions = [], userAnswers = {}, content = contentFromStorage } = state || {};
+  const storedContent =
+    localStorage.getItem('eduassist_quiz_content') || '';
+
+  const {
+    questions = [],
+    userAnswers = {},
+    content = storedContent,
+  } = state || {};
 
   const [saveMessage, setSaveMessage] = useState(null);
   const [saveStatus, setSaveStatus] = useState(null);
 
-  const score = questions.reduce((total, q, i) => {
-    return total + (userAnswers[i] === q.answer ? 1 : 0);
-  }, 0);
+  const email = localStorage.getItem('eduassist_user_email');
 
-  const email = localStorage.getItem("eduassist_user_email");
+  const score = questions.reduce((t, q, i) => {
+    return t + (userAnswers[i] === q.answer ? 1 : 0);
+  }, 0);
 
   useEffect(() => {
     const saveTraits = async () => {
-      if (!email || questions.length === 0) return;
+      if (!email || !questions.length) return;
 
-      console.log("📧 Logged in email:", email);
-      console.log("📝 Raw content:", content);
-
-      // Step 1: Get student ID
-      const { data: studentData, error: studentError } = await supabase
-        .from("students")
-        .select("id")
-        .eq("email", email)
+      // Get student id
+      const { data: studentData } = await supabase
+        .from('students')
+        .select('id')
+        .eq('email', email)
         .single();
 
-      if (studentError || !studentData) {
-        console.error("❌ Student fetch error:", studentError?.message || studentError);
-        setSaveStatus("error");
-        setSaveMessage("❌ Failed to find student record.");
-        return;
-      }
+      if (!studentData) return;
 
       const student_id = studentData.id;
 
-      // Step 2: Extract topic
-      let topicName = content.trim().slice(0, 80); // fallback topic
+      // Extract topic via Ollama
+      let topicName = content.slice(0, 80);
+
       if (content.length > 300) {
         try {
-          const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
-          const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
-          const topicPrompt = `Summarize this content into a short topic name (max 5 words):\n\n"""${content}"""`;
-          const result = await model.generateContent([topicPrompt]);
-          const topicText = await result.response.text();
-          topicName = topicText.trim().replace(/^"|"$/g, '') || topicName;
+          const prompt = `
+Give a short topic name (max 5 words).
+Return only topic.
+
+"""${content}"""
+`;
+
+          const res = await fetch(
+            'http://localhost:11434/api/generate',
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                model: 'gpt-oss:120b-cloud',
+                prompt,
+                stream: false,
+              }),
+            }
+          );
+
+          const data = await res.json();
+
+          if (data.response) {
+            topicName = data.response.trim();
+          }
+
         } catch (err) {
-          console.error("❌ Topic extraction error:", err);
+          console.error(err);
         }
       }
 
       const strengths = score >= 3 ? [topicName] : [];
       const weaknesses = score < 3 ? [topicName] : [];
 
-      // Step 3: Fetch existing traits
-      const { data: existingTraits, error: fetchError } = await supabase
-        .from("student_traits")
-        .select("strengths, weaknesses")
-        .eq("student_id", student_id)
+      // Fetch existing
+      const { data: traits } = await supabase
+        .from('student_traits')
+        .select('strengths, weaknesses')
+        .eq('student_id', student_id)
         .single();
 
-      const existingStrengths = existingTraits?.strengths || [];
-      const existingWeaknesses = existingTraits?.weaknesses || [];
+      const mergedStrengths = [
+        ...new Set([...(traits?.strengths || []), ...strengths]),
+      ];
 
-      // Merge without duplicates
-      const mergedStrengths = Array.from(new Set([...existingStrengths, ...strengths]));
-      const mergedWeaknesses = Array.from(new Set([...existingWeaknesses, ...weaknesses]));
+      const mergedWeaknesses = [
+        ...new Set([...(traits?.weaknesses || []), ...weaknesses]),
+      ];
 
-      // Step 4: Save to Supabase
-      const { error: traitError } = await supabase
-        .from("student_traits")
-        .upsert(
-          [
-            {
-              student_id,
-              strengths: mergedStrengths,
-              weaknesses: mergedWeaknesses,
-            }
-          ],
-          { onConflict: ['student_id'] }
-        );
+      // Save
+      const { error } = await supabase
+        .from('student_traits')
+        .upsert({
+          student_id,
+          strengths: mergedStrengths,
+          weaknesses: mergedWeaknesses,
+        });
 
-      if (traitError) {
-        console.error("❌ Trait save error:", traitError.message || traitError);
-        setSaveStatus("error");
-        setSaveMessage(`❌ Save failed: ${traitError.message || "Unknown error"}`);
+      if (error) {
+        setSaveStatus('error');
+        setSaveMessage('❌ Save failed');
       } else {
-        setSaveStatus("success");
-        setSaveMessage("✅ Your strengths and weaknesses have been saved!");
-        localStorage.removeItem("eduassist_quiz_content");
+        setSaveStatus('success');
+        setSaveMessage('✅ Progress saved');
+        localStorage.removeItem('eduassist_quiz_content');
       }
 
-      // Auto-dismiss message
       setTimeout(() => {
         setSaveMessage(null);
         setSaveStatus(null);
-      }, 5000);
+      }, 4000);
     };
 
     saveTraits();
@@ -114,23 +128,24 @@ const QuizResult = () => {
     <motion.div
       initial={{ opacity: 0, y: 40 }}
       animate={{ opacity: 1, y: 0 }}
-      className="min-h-screenbg-gradient-to-br from-slate-800  to-slate-900-gray-900 p-6"
+      className="min-h-screen bg-slate-900 p-6 text-white"
     >
       <div className="text-center mb-10">
-        <h1 className="text-4xl font-bold mb-4 text-blue-700 flex items-center justify-center gap-2">
-          <Trophy size={32} /> <span className="text-blue-400">Quiz Results</span>
+        <h1 className="text-4xl font-bold mb-4 text-blue-400 flex justify-center gap-2">
+          <Trophy /> Quiz Result
         </h1>
+
         <p className="text-xl">
-          🎯 You scored <span className="text-green-500 font-bold">{score} / {questions.length}</span>
+          🎯 Score: {score}/{questions.length}
         </p>
       </div>
 
       {saveMessage && (
         <div
-          className={`max-w-2xl mx-auto mb-6 px-4 py-3 rounded-lg text-center font-medium ${
-            saveStatus === "success"
-              ? "bg-green-100 text-green-700 border border-green-300"
-              : "bg-red-100 text-red-700 border border-red-300"
+          className={`max-w-xl mx-auto mb-6 p-3 rounded ${
+            saveStatus === 'success'
+              ? 'bg-green-200 text-green-800'
+              : 'bg-red-200 text-red-800'
           }`}
         >
           {saveMessage}
@@ -139,30 +154,37 @@ const QuizResult = () => {
 
       <div className="space-y-4 max-w-3xl mx-auto">
         {questions.map((q, i) => (
-          <motion.div
+          <div
             key={i}
-            className="bg-white/70 backdrop-blur-md border border-blue-200 p-4 rounded-xl shadow"
-            initial={{ opacity: 0, x: 10 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: i * 0.1 }}
+            className="bg-white/70 text-black p-4 rounded-xl"
           >
-            <p className="font-semibold">{i + 1}. {q.question}</p>
+            <p className="font-semibold">
+              {i + 1}. {q.question}
+            </p>
+
             <p className="text-sm mt-1">
-              ✅ Correct Answer: <span className="text-green-600 font-semibold">{q.answer}</span><br />
-              🧍 Your Answer: <span className={userAnswers[i] === q.answer ? 'text-green-600' : 'text-red-500 font-semibold'}>
+              ✅ Correct: {q.answer} <br />
+              🧍 Yours:{' '}
+              <span
+                className={
+                  userAnswers[i] === q.answer
+                    ? 'text-green-600'
+                    : 'text-red-600 font-semibold'
+                }
+              >
                 {userAnswers[i] || 'Not answered'}
               </span>
             </p>
-          </motion.div>
+          </div>
         ))}
       </div>
 
       <div className="flex justify-center mt-10">
         <button
           onClick={() => navigate('/quiz-generate')}
-          className="bg-blue-500 px-6 py-2 rounded-xl hover:bg-blue-600 text-white font-semibold flex items-center gap-2"
+          className="bg-blue-500 px-6 py-2 rounded-xl hover:bg-blue-600 flex gap-2"
         >
-          <RotateCcw size={20} /> Try Again
+          <RotateCcw /> Try Again
         </button>
       </div>
     </motion.div>
