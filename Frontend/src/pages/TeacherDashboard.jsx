@@ -54,24 +54,24 @@ const TeacherDashboard = () => {
     }
   }, [teacherId]);
 
-  useEffect(() => {
-    const fetchTeacherDetails = async () => {
-      if (!teacherId) return;
-      const { data, error } = await supabase
-        .from("teachers")
-        .select("name, email, subject, class")
-        .eq("teacher_id", teacherId)
-        .single();
+  // useEffect(() => {
+  //   const fetchTeacherDetails = async () => {
+  //     if (!teacherId) return;
+  //     const { data, error } = await supabase
+  //       .from("teachers")
+  //       .select("name, email, subject, class")
+  //       .eq("teacher_id", teacherId)
+  //       .single();
 
-      if (error) {
-        console.error("Error fetching teacher details:", error.message);
-      } else {
-        setTeacherDetails(data);
-      }
-    };
+  //     if (error) {
+  //       console.error("Error fetching teacher details:", error.message);
+  //     } else {
+  //       setTeacherDetails(data);
+  //     }
+  //   };
 
-    fetchTeacherDetails();
-  }, [teacherId]);
+  //   fetchTeacherDetails();
+  // }, [teacherId]);
 
   const fetchStudents = async (tId) => {
     const { data, error } = await supabase
