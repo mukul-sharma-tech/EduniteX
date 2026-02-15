@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { User, Upload, Users, BookOpen, MessageSquare, CheckCircle, Clock, FileText, Phone, Mail, GraduationCap } from "lucide-react";
+import { User, Upload, Users, BookOpen, MessageSquare, CheckCircle, Clock, FileText, Phone, Mail, GraduationCap, ClipboardList } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 
 const TeacherDashboard = () => {
@@ -14,6 +14,7 @@ const TeacherDashboard = () => {
   const [teacherDetails, setTeacherDetails] = useState({});
   const [students, setStudents] = useState([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [testResults, setTestResults] = useState([]);
 
   useEffect(() => {
     const storedTeacherId = localStorage.getItem("eduassist_teacher_id");
@@ -119,6 +120,85 @@ const TeacherDashboard = () => {
     }
   }, [teacherId]);
 
+  const fetchTestResults = async (tId, assignedStudents) => {
+    console.log("🔍 Starting fetch. Assigned Students Count:", assignedStudents?.length);
+
+    try {
+      const { data: tests, error: testsError } = await supabase
+        .from("tests")
+        .select("id, title, questions")
+        .eq("teacher_id", tId);
+
+      if (testsError) throw testsError;
+      if (!tests || tests.length === 0) {
+        console.log("⚠️ No tests found for this teacher.");
+        return;
+      }
+
+      const testIds = tests.map(t => t.id);
+
+      const { data: submissions, error: subError } = await supabase
+        .from("test_submissions")
+        .select("*")
+        .in("test_id", testIds)
+        .order("created_at", { ascending: false });
+
+      if (subError) throw subError;
+
+      if (!submissions || submissions.length === 0) {
+        console.log("⚠️ No submissions found for these tests.");
+        setTestResults([]); // Explicitly set to empty so loader stops
+        return;
+      }
+
+      const formattedResults = submissions
+        .map(sub => {
+          const testMatch = tests.find(t => t.id === sub.test_id);
+
+          // FIX: Added a fallback to check both ID types and trimmed strings
+          const studentMatch = assignedStudents?.find(s =>
+            s.auth_id === sub.student_id ||
+            s.id === sub.student_id ||
+            s.auth_id === sub.student_id?.trim()
+          );
+
+          const totalQuestions = testMatch?.questions ? testMatch.questions.length : "?";
+
+          return {
+            id: sub.id,
+            testName: testMatch?.title || "Unknown Test",
+            // FALLBACK: If studentMatch is missing, show the ID so the row doesn't break
+            studentName: studentMatch?.name || sub.student_name || `Student (${sub.student_id.slice(0, 5)})`,
+            score: sub.score || 0,
+            total: totalQuestions,
+            rawDate: sub.created_at,
+            date: new Date(sub.created_at).toLocaleDateString()
+          };
+        })
+        .slice(0, 5); // Take top 5
+
+      console.log("✅ Successfully formatted results:", formattedResults.length);
+      setTestResults(formattedResults);
+
+    } catch (err) {
+      console.error("❌ Error fetching test results:", err.message);
+    }
+  };
+  useEffect(() => {
+    // Debug logs to see what's actually in your variables
+    console.log("🛠 Dashboard State Check:", {
+      teacherId,
+      studentsCount: students?.length
+    });
+
+    if (teacherId) {
+      console.log("🚀 Calling fetchTestResults...");
+      fetchTestResults(teacherId, students || []); // Fallback to empty array if students aren't loaded
+    } else {
+      console.warn("🛑 fetchTestResults blocked: teacherId is missing.");
+    }
+  }, [teacherId, students]);
+
   const handleUpload = async () => {
     if (!subject || !className || !syllabusPDF || !notesPDF)
       return alert("Please fill all fields and upload both PDFs.");
@@ -181,11 +261,11 @@ const TeacherDashboard = () => {
       prev.map((meeting) =>
         meeting.meeting_id === meetingId
           ? {
-              ...meeting,
-              students_doubts: meeting.students_doubts.map((d, i) =>
-                i === doubtIndex ? { ...d, solve: solution } : d
-              ),
-            }
+            ...meeting,
+            students_doubts: meeting.students_doubts.map((d, i) =>
+              i === doubtIndex ? { ...d, solve: solution } : d
+            ),
+          }
           : meeting
       )
     );
@@ -235,7 +315,7 @@ const TeacherDashboard = () => {
                 <p className="text-gray-400">Your Profile Information</p>
               </div>
             </div>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <div className="flex items-center gap-3">
                 <User className="h-5 w-5 text-blue-400" />
@@ -244,7 +324,7 @@ const TeacherDashboard = () => {
                   <p className="text-white font-medium">{teacherDetails.name}</p>
                 </div>
               </div>
-              
+
               <div className="flex items-center gap-3">
                 <Mail className="h-5 w-5 text-green-400" />
                 <div>
@@ -252,7 +332,7 @@ const TeacherDashboard = () => {
                   <p className="text-white font-medium">{teacherDetails.email}</p>
                 </div>
               </div>
-              
+
               <div className="flex items-center gap-3">
                 <Phone className="h-5 w-5 text-yellow-400" />
                 <div>
@@ -260,7 +340,7 @@ const TeacherDashboard = () => {
                   <p className="text-white font-medium">{teacherDetails.phone}</p>
                 </div>
               </div>
-              
+
               <div className="flex items-center gap-3">
                 <BookOpen className="h-5 w-5 text-purple-400" />
                 <div>
@@ -295,7 +375,7 @@ const TeacherDashboard = () => {
                 className="w-full px-4 py-3 bg-[#0f172a] border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-gray-400"
               />
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium mb-2 text-gray-300">Class</label>
               <input
@@ -321,7 +401,7 @@ const TeacherDashboard = () => {
                 className="w-full px-4 py-3 bg-[#0f172a] border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-medium file:bg-blue-500 file:text-white hover:file:bg-blue-600"
               />
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium mb-2 text-gray-300 flex items-center gap-2">
                 <FileText className="h-4 w-4" />
@@ -394,6 +474,53 @@ const TeacherDashboard = () => {
             <div className="text-center py-8">
               <Users className="h-16 w-16 text-gray-600 mx-auto mb-4" />
               <p className="text-gray-400">No students assigned to you yet.</p>
+            </div>
+          )}
+        </div>
+
+        {/* Test Results Section */}
+        <div className="bg-[#1e293b] rounded-lg p-8 shadow-lg mb-8 border border-gray-700">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="bg-pink-500 p-3 rounded-full">
+              <ClipboardList className="h-6 w-6 text-white" />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-white">Student Test Results</h3>
+              <p className="text-gray-400">Recent scores graded by AI</p>
+            </div>
+          </div>
+
+          {testResults.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-600">
+                    <th className="text-left py-3 px-4 text-gray-300 font-medium">Student Name</th>
+                    <th className="text-left py-3 px-4 text-gray-300 font-medium">Test Title</th>
+                    <th className="text-left py-3 px-4 text-gray-300 font-medium">Date Taken</th>
+                    <th className="text-left py-3 px-4 text-gray-300 font-medium">Score</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {testResults.map((result) => (
+                    <tr key={result.id} className="border-b border-gray-700 hover:bg-[#0f172a] transition-colors">
+                      <td className="py-3 px-4 text-white font-medium">{result.studentName}</td>
+                      <td className="py-3 px-4 text-gray-300">{result.testName}</td>
+                      <td className="py-3 px-4 text-gray-400 text-sm">{result.date}</td>
+                      <td className="py-3 px-4">
+                        <span className="bg-blue-500/20 text-blue-400 px-3 py-1 rounded-full text-sm font-bold border border-blue-500/30">
+                          {result.score} / {result.total}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <ClipboardList className="h-16 w-16 text-gray-600 mx-auto mb-4" />
+              <p className="text-gray-400">No tests have been submitted yet.</p>
             </div>
           )}
         </div>

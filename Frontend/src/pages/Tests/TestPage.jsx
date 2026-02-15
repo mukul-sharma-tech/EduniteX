@@ -20,47 +20,92 @@ const TestPage = () => {
   const [saving, setSaving] = useState(false);
   const [testTitle, setTestTitle] = useState(`${subjectName} Quiz`);
 
-  const prompt = `
-Generate exactly 5 multiple choice questions based on the provided text.
-OUTPUT RULES:
-1. Return ONLY a valid JSON array.
-2. Each question MUST have exactly 4 distinct options.
-3. The "answer" field MUST match the text of the correct option exactly.
-TEXT TO ANALYZE:
+const prompt = `
+### ROLE
+You are a Senior Academic Professor and Subject Matter Expert. Your goal is to create a rigorous assessment that tests deep conceptual understanding.
+
+### SOURCE TEXT
 """${content}"""
+
+### TASK
+Generate exactly 5 high-quality MCQs based ONLY on the technical/conceptual facts in the text.
+
+### STRICT QUALITY RULES
+1. BANNED QUESTIONS: Do not ask about the document itself (e.g., "What is the title?", "What is the syllabus about?").
+2. CONCEPTUAL FOCUS: Focus on "How" and "Why" concepts.
+3. DISTRACTOR LOGIC: Create 3 plausible but incorrect options.
+
+### OUTPUT FORMAT (CRITICAL)
+- Return ONLY a valid JSON array.
+- Each "answer" MUST be a character-for-character identical string to one of the strings in the "options" array.
+
+### JSON SCHEMA
+[
+  {
+    "question": "The question text",
+    "options": ["Opt A", "Opt B", "Opt C", "Opt D"],
+    "answer": "Opt B" 
+  }
+]
 `;
 
   useEffect(() => {
-    const generateTest = async () => {
-      if (!content) {
-        setLoading(false);
-        return;
-      }
-      try {
-        const res = await fetch('http://localhost:11434/api/generate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            model: 'llama3.2', 
-            prompt,
-            stream: false,
-            options: { temperature: 0.1 }
-          }),
-        });
-        const data = await res.json();
-        const startIdx = data.response.indexOf('[');
-        const endIdx = data.response.lastIndexOf(']');
-        if (startIdx === -1 || endIdx === -1) throw new Error("AI failed to provide JSON");
-        setQuestions(JSON.parse(data.response.substring(startIdx, endIdx + 1)));
-      } catch (err) {
-        console.error('Test Generation Error:', err);
-        alert('⚠️ AI formatting error. Try regenerating.');
-      } finally {
-        setLoading(false);
-      }
-    };
-    generateTest();
-  }, [content]);
+  const generateTest = async () => {
+    if (!content) {
+      setLoading(false);
+      return;
+    }
+    try {
+      const res = await fetch('http://localhost:11434/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'llama3.2', 
+          prompt,
+          stream: false,
+          options: { 
+            temperature: 0.1, // Keeps it focused and consistent
+            num_ctx: 4096     // Ensures enough context for longer texts
+          }
+        }),
+      });
+
+      const data = await res.json();
+      
+      // 1. EXTRACTION: Find the JSON array within the AI's response
+      const startIdx = data.response.indexOf('[');
+      const endIdx = data.response.lastIndexOf(']');
+      
+      if (startIdx === -1 || endIdx === -1) throw new Error("AI failed to provide valid JSON format");
+      
+      const rawJson = JSON.parse(data.response.substring(startIdx, endIdx + 1));
+
+      // 2. SANITIZATION: Clean up extra spaces/newlines to ensure bitwise matching
+      const sanitizedQuestions = rawJson.map(q => {
+        // Trim the answer and all options so "Correct" matches " Correct "
+        const trimmedAnswer = q.answer.trim();
+        const trimmedOptions = q.options.map(opt => opt.trim());
+        
+        return {
+          ...q,
+          question: q.question.trim(),
+          options: trimmedOptions,
+          answer: trimmedAnswer
+        };
+      });
+
+      setQuestions(sanitizedQuestions);
+
+    } catch (err) {
+      console.error('Test Generation Error:', err);
+      alert('⚠️ Test generation failed. This usually happens if the AI output was interrupted or incorrectly formatted. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  generateTest();
+}, [content]);
 
   const updateQuestion = (index, field, value) => {
     const updated = [...questions];

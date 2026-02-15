@@ -116,7 +116,7 @@ import TestPage from './pages/Tests/TestPage';
 import TestResult from './pages/Tests/TestResult';
 import AvailableTests from './pages/Tests/AvailableTests';
 import StudentTestTaker from './pages/Tests/StudentTestTaker';
-
+import TestAnalytics from './pages/Tests/TestAnalytics';
 
 const AppLayout = () => {
   const location = useLocation();
@@ -161,6 +161,7 @@ const AppLayout = () => {
         <Route path="/tests/result" element={<TestResult />} />
         <Route path="/tests/available" element={<AvailableTests />} />
         <Route path="/tests/take/:testId" element={<StudentTestTaker />} /> 
+        <Route path="/tests/analytics" element={<TestAnalytics />} />
         
       </Routes>
       {!hideNavAndFooter && <Footer />}

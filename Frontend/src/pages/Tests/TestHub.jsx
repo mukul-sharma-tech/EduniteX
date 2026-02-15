@@ -15,15 +15,30 @@ const TestHub = () => {
 
         {/* 3. ONLY SHOW IF ROLE IS TEACHER */}
         {role === 'teacher' && (
-          <div className="border border-blue-100 p-4 rounded-xl bg-blue-50">
-            <h2 className="text-xl font-semibold text-blue-800 mb-2">Teacher View</h2>
-            <p className="text-sm text-blue-600 mb-4">Fetch syllabus and generate AI tests.</p>
-            <button
-              onClick={() => navigate('/tests/upload')}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition-colors"
-            >
-              Go to Generator
-            </button>
+          <div className="flex flex-col gap-4 w-full">
+            {/* Existing Generator Card */}
+            <div className="border border-blue-100 p-4 rounded-xl bg-blue-50">
+              <h2 className="text-xl font-semibold text-blue-800 mb-2">Teacher View</h2>
+              <p className="text-sm text-blue-600 mb-4">Fetch syllabus and generate AI tests.</p>
+              <button
+                onClick={() => navigate('/tests/upload')}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition-colors"
+              >
+                Go to Generator
+              </button>
+            </div>
+
+            {/* NEW: Analytics & Previous Tests Card */}
+            <div className="border border-purple-100 p-4 rounded-xl bg-purple-50">
+              <h2 className="text-xl font-semibold text-purple-800 mb-2">Test Analytics</h2>
+              <p className="text-sm text-purple-600 mb-4">View previous tests, student rankings, and performance scores.</p>
+              <button
+                onClick={() => navigate('/tests/analytics')}
+                className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg transition-colors"
+              >
+                View Past Results
+              </button>
+            </div>
           </div>
         )}
 
@@ -43,7 +58,7 @@ const TestHub = () => {
 
         {/* Fallback if somehow they have no role yet */}
         {!role && (
-           <p className="text-red-500 font-semibold">Please log in to access the hub.</p>
+          <p className="text-red-500 font-semibold">Please log in to access the hub.</p>
         )}
 
       </div>
