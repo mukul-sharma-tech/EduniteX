@@ -90,6 +90,7 @@ import Footer from "./components/Footer";
 import About from "./pages/About";
 import EduAI from "./pages/EduAI";
 import "./App.css";
+import { AuthProvider } from "./context/AuthContext";
 import HomePage from "./pages/HomePage";
 import AssignmentUpload from "./pages/Assignment/AssignmentUpload";
 import AssignmentSolver from "./pages/Assignment/AssignmentSolver";
@@ -109,6 +110,13 @@ import Login from "./pages/Login";
 import TeacherDashboard from "./pages/TeacherDashboard";
 import StudentDashboard from "./pages/StudentDashboard";
 import YouTubeAnalyzer from "./pages/youtubeVideoAnalyzer/Analyzer";
+import TestHub from './pages/Tests/TestHub';
+import TestUpload from './pages/Tests/TestUpload';
+import TestPage from './pages/Tests/TestPage';
+import TestResult from './pages/Tests/TestResult';
+import AvailableTests from './pages/Tests/AvailableTests';
+import StudentTestTaker from './pages/Tests/StudentTestTaker';
+import TestAnalytics from './pages/Tests/TestAnalytics';
 
 const AppLayout = () => {
   const location = useLocation();
@@ -145,6 +153,16 @@ const AppLayout = () => {
         <Route path="/login" element={<Login />} />
         <Route path="/teacher-dashboard" element={<TeacherDashboard />} />
         <Route path="/student-dashboard" element={<StudentDashboard />} />
+
+        {/* Syllabus Tests Feature */}
+        <Route path="/tests" element={<TestHub />} />
+        <Route path="/tests/upload" element={<TestUpload />} />
+        <Route path="/tests/take" element={<TestPage />} />
+        <Route path="/tests/result" element={<TestResult />} />
+        <Route path="/tests/available" element={<AvailableTests />} />
+        <Route path="/tests/take/:testId" element={<StudentTestTaker />} /> 
+        <Route path="/tests/analytics" element={<TestAnalytics />} />
+        
       </Routes>
       {!hideNavAndFooter && <Footer />}
     </>
@@ -152,9 +170,11 @@ const AppLayout = () => {
 };
 
 const App = () => (
-  <Router>
-    <AppLayout />
-  </Router>
+  <AuthProvider>
+    <Router>
+      <AppLayout />
+    </Router>
+  </AuthProvider>
 );
 
 export default App;

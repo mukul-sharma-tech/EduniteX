@@ -93,6 +93,15 @@ const FeaturesGrid = () => {
       color: "bg-green-500",
       hoverColor: "hover:bg-green-600"
     },
+    //  ADD THIS NEW BLOCK 
+    {
+      title: "Syllabus Tests",
+      description: "Generate or take AI tests based on your class syllabus",
+      icon: GraduationCap, 
+      path: "/tests", 
+      color: "bg-amber-500",
+      hoverColor: "hover:bg-amber-600"
+    }
     // {
     //   title: "Video Calling",
     //   description: "Connect with teachers and students virtually",
